@@ -1,0 +1,10 @@
+node_modules
+dist
+coverage
+*.local
+.DS_Store
+# Never commit real financial data. Put personal CSV files in ./private (ignored).
+private/
+*.decisionlab-backup.json
+*.decisionlab-backup.enc.json
+test-results/
