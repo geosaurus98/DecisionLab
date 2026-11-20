@@ -1,0 +1,151 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Design tokens. Components use semantic names (bg-surface, text-ink-2…) so light and dark
+ * themes swap in one place. Chart series colours follow a validated colour-blind-safe order.
+ */
+:root {
+  color-scheme: light;
+  --page: #f7f7f5;
+  --surface: #ffffff;
+  --surface-2: #f2f1ee;
+  --border: #e3e2dc;
+  --ink: #111110;
+  --ink-2: #52514e;
+  --muted: #76746e;
+  --accent: #1d4f91;
+  --accent-ink: #ffffff;
+  --accent-soft: #e4edf9;
+  --good: #006300;
+  --good-soft: #e3f3e3;
+  --warn: #8a5a00;
+  --warn-soft: #fdf1d6;
+  --bad: #b42323;
+  --bad-soft: #fbe5e5;
+  --grid: #e9e8e2;
+  --axis: #c3c2b7;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #6250d6;
+  --series-8: #e34948;
+  --series-neutral: #a8a69f;
+}
+
+:root.dark {
+  color-scheme: dark;
+  --page: #0f0f0e;
+  --surface: #1a1a19;
+  --surface-2: #232321;
+  --border: #33332f;
+  --ink: #f0efec;
+  --ink-2: #c3c2b7;
+  --muted: #9a988f;
+  --accent: #6aa5ec;
+  --accent-ink: #0b0b0b;
+  --accent-soft: #1d2b3d;
+  --good: #3cc13c;
+  --good-soft: #15291a;
+  --warn: #f0b429;
+  --warn-soft: #2f2611;
+  --bad: #f07272;
+  --bad-soft: #351a1a;
+  --grid: #2c2c2a;
+  --axis: #4a4a45;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #0ca30c;
+  --series-7: #9085e9;
+  --series-8: #e66767;
+  --series-neutral: #6b6a64;
+}
+
+@theme inline {
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+html,
+body {
+  background: var(--page);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'tnum' 0;
+}
+
+/* Grid items default to min-width:auto, so a single nowrap/truncated line can force an
+   implicit grid column (and the whole page) wider than a phone screen. */
+.grid > * {
+  min-width: 0;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+
+/* Recharts: keep chart chrome recessive and theme-aware */
+.recharts-cartesian-grid line {
+  stroke: var(--grid);
+}
+.recharts-cartesian-axis-line,
+.recharts-cartesian-axis-tick-line {
+  stroke: var(--axis);
+}
+.recharts-text {
+  fill: var(--muted);
+  font-size: 12px;
+}
+.recharts-legend-item-text {
+  color: var(--ink-2) !important;
+}
+.recharts-surface:focus,
+.recharts-wrapper:focus,
+.recharts-sector:focus,
+.recharts-rectangle:focus {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

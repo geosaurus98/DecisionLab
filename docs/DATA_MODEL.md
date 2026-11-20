@@ -1,0 +1,89 @@
+# Data model
+
+Source of truth: [`src/domain/types.ts`](../src/domain/types.ts). Storage: IndexedDB database `decisionlab`, defined in [`src/data/db.ts`](../src/data/db.ts) (schema version 1).
+
+## Conventions
+
+- **Money**: integer cents (`Cents`), e.g. `-8420` = −$84.20. Negative = money out, positive = money in.
+- **Dates**: `IsoDate` = `"YYYY-MM-DD"` (local calendar date, no time zone). `MonthKey` = `"YYYY-MM"`. Audit fields (`createdAt`, …) are ISO-8601 instants.
+- **Rates**: annual decimals (`0.06` = 6%).
+- **Ids**: random UUIDs with a readable prefix (`txn_…`, `dec_…`).
+
+## Entity relationships
+
+```mermaid
+erDiagram
+  ACCOUNT ||--o{ TRANSACTION : holds
+  ACCOUNT ||--o{ IMPORT_BATCH : "imported into"
+  IMPORT_BATCH ||--o{ TRANSACTION : created
+  CATEGORY ||--o{ TRANSACTION : classifies
+  CATEGORY ||--o{ CATEGORY_RULE : "target of"
+  CATEGORY ||--o{ MERCHANT_MEMORY : "remembered as"
+  DECISION ||--|{ DECISION_OPTION : has
+  DECISION ||--o{ CRITERION : has
+  DECISION ||--o| DECISION_SNAPSHOT : "frozen at choice"
+  DECISION ||--o| OUTCOME_REVIEW : "reviewed by"
+  SCENARIO_SET ||--|{ SCENARIO_VARIANT : compares
+```
+
+## Tables
+
+| Table | Key / indexes | Entity | Notes |
+| --- | --- | --- | --- |
+| `accounts` | `id` | `Account` | Optional manual `balance {amount, asOf}`; `includeInLiquid` controls flexibility; `isDemo` for synthetic data |
+| `categories` | `id`, `sortOrder` | `Category` | `kind`: income / expense / transfer / savings; `essential` for expenses; `archived` instead of deleting used categories |
+| `transactions` | `id`, `accountId`, `importId`, `date`, `categoryId`, `merchant`, `fingerprint` | `Transaction` | `amount` signed cents; `merchant` normalised key; `categorySource`: rule / memory / manual / none; `original` = raw CSV row for audit |
+| `rules` | `id`, `priority` | `CategoryRule` | field (description/merchant), operator (contains/startsWith/equals/regex), direction, optional account; lower priority runs first |
+| `merchantMemory` | `merchant` | `MerchantMemory` | Learned from manual corrections; outranks rules |
+| `imports` | `id`, `accountId`, `importedAt` | `ImportBatch` | Mapping used, counts, date range; `status: active/undone` (kept after undo for history) |
+| `importProfiles` | `id` | `ImportProfile` | Saved CSV column mappings |
+| `goals` | `id` | `Goal` | `earmarked` amounts are excluded from available funds |
+| `decisions` | `id`, `status`, `date`, `reviewDate`, `updatedAt` | `Decision` | Embeds options, criteria, score matrix, its own `ProjectionAssumptions`, `snapshot`, `snapshotHistory`, `review` |
+| `scenarioSets` | `id`, `updatedAt` | `ScenarioSet` | Base assumptions + variants (one-off and recurring flows, contribution change) |
+| `settings` | `key` | key–value | `financialProfile`, `defaultAssumptions`, `seeded`, `dismissedRecurring` |
+
+UI-only preferences (theme) are kept in `localStorage`, never financial data.
+
+## Key entities
+
+### Transaction
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `date` | IsoDate | Transaction date from the statement |
+| `amount` | Cents | Signed amount |
+| `description` | string | Joined description columns |
+| `merchant` | string | Normalised key (card numbers, dates, reference codes and payment prefixes removed) |
+| `categoryId` / `categorySource` / `ruleId` | | Current category and how it was assigned |
+| `fingerprint` | string | `account|date|amount|DESCRIPTION|occurrence` — used for duplicate detection |
+| `original` | Record<string,string> | Untouched CSV row |
+| `importId` | string \| null | Batch that created it (null = manual) |
+
+### Decision
+
+- `options[]`: `name`, `upfrontCost` (cents, positive = cost), `costMonth`, `monthlyCost` (may be negative for savings), `monthlyCostMonths`, `expectedBenefits`, `risks`.
+- `criteria[]`: `name`, `type` (`rating` 0–10 or `measure`), `direction` (higher/lower is better), `weight` (relative), `unit`.
+- `scores[optionId][criterionId]`: number or null.
+- `assumptions`: the decision's own copy of projection assumptions (not a reference to global defaults).
+- `selectedOptionId`, `reasoning`, `predictedSatisfaction` (1–10), `confidence` (1–5), `reviewDate`.
+- `snapshot`: `DecisionSnapshot` — deep copy of options, criteria, scores, ranking, assumptions, projected financials per option, available funds, predictions and predicted cost, captured when the choice is recorded. **Never rewritten.**
+- `snapshotHistory[]`: earlier snapshots when a choice was reopened before review.
+- `review`: actual cost, satisfaction, expectations met, would repeat, benefits, unexpected consequences, lessons.
+
+Status lifecycle: `considering → decided → completed (optional) → reviewed`. Reviewed decisions cannot be reopened (duplicate instead).
+
+### ProjectionAssumptions
+
+`startMonth`, `horizonMonths`, `initialBalance`, `monthlyContribution`, `timing` (`start`/`end`), `annualReturn`, `annualFee`, `taxRateOnReturns`, `annualInflation`, optional `targetAmount`. See [CALCULATIONS.md](CALCULATIONS.md).
+
+## Backups
+
+Format `decisionlab-backup` version 1: `{ format, version, exportedAt, data: { <table>: rows[] } }`. Encrypted backups (`decisionlab-encrypted-backup`) wrap the same JSON: `{ kdf: {PBKDF2, SHA-256, iterations, salt}, cipher: {AES-GCM, iv}, ciphertext }` (base64).
+
+Restore: parse → `migrateBackup` (rejects unknown/newer formats) → zod validation of every row → replace all tables in a single IndexedDB transaction.
+
+## Migrations
+
+1. Add `this.version(n).stores({...}).upgrade(tx => ...)` in `db.ts`; never edit earlier versions.
+2. Bump `BACKUP_VERSION` and add an upgrade step in `migrateBackup` for older backup files.
+3. Update zod schemas, this document and tests (`src/data/__tests__`).
