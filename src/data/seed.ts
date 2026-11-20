@@ -45,7 +45,7 @@ const RULE_SEEDS: RuleSeed[] = [
   ["Pak'nSave", "pak ?'?n ?save", 'cat-groceries'],
   ['Fresh Choice / Four Square', 'fresh choice|four square', 'cat-groceries'],
   ['Cafes and takeaways', 'cafe|coffee|uber \\*?eats|uber eats|delivereasy|mcdonald|burger|sushi|pizza|kebab|bakery', 'cat-eating-out'],
-  ['Fuel', 'z energy|\\bbp\\b|mobil|gull|waitomo|caltex|\\bnpd\\b', 'cat-transport'],
+  ['Fuel', '\\b(z energy|bp|mobil|gull|waitomo|caltex|npd)\\b', 'cat-transport'],
   ['Public transport', 'at hop|snapper|metlink|bee card|uber trip|\\buber\\b(?! \\*?eats)', 'cat-transport'],
   ['Power / internet / phone', 'mercury|genesis|contact energy|meridian|electric kiwi|spark|one nz|2degrees|skinny|vodafone|watercare', 'cat-utilities'],
   ['Streaming and software', 'netflix|spotify|disney|neon|apple\\.com|google \\*|icloud|youtube|github|adobe|chatgpt|openai', 'cat-subscriptions'],

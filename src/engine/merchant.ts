@@ -42,10 +42,11 @@ export function normaliseMerchant(description: string): string {
       }
     }
   }
-  // Drop long digit-only tokens (reference numbers), keep short numbers (e.g. "Z ENERGY 2")
+  // Drop reference-like tokens: long digit runs and long letter+digit codes ("P2A1B2C3"),
+  // but keep short numbers (e.g. "Z ENERGY 2")
   s = s
     .split(' ')
-    .filter((tok) => !/^\d{5,}$/.test(tok))
+    .filter((tok) => !/^\d{5,}$/.test(tok) && !(tok.length >= 6 && /\d/.test(tok) && /[A-Z]/.test(tok)))
     .join(' ');
   return s.trim() || description.trim().toUpperCase();
 }

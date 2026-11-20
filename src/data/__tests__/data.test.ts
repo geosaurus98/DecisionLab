@@ -207,3 +207,22 @@ describe('demo dataset', () => {
     expect(await db.categories.count()).toBeGreaterThan(10);
   });
 });
+
+describe('default rules', () => {
+  it('categorise common NZ merchants without false matches', async () => {
+    const { defaultRules } = await import('../seed');
+    const { categorise, sortRules } = await import('@/engine/categorise');
+    const { normaliseMerchant } = await import('@/engine/merchant');
+    const rules = sortRules(defaultRules());
+    const cat = (d: string, amount = -1000) => categorise({ description: d, merchant: normaliseMerchant(d), amount, accountId: 'a' }, rules, new Map()).categoryId;
+    expect(cat('ONE NZ MOBILE')).toBe('cat-utilities');
+    expect(cat('MOBIL TE ARO')).toBe('cat-transport');
+    expect(cat('Z ENERGY TE ARO')).toBe('cat-transport');
+    expect(cat('TRANSFER TO SHARESIES')).toBe('cat-savings');
+    expect(cat('TRANSFER TO SAVINGS')).toBe('cat-transfers');
+    expect(cat('UBER *EATS')).toBe('cat-eating-out');
+    expect(cat('UBER TRIP HELP.UBER.COM')).toBe('cat-transport');
+    expect(cat('ACME LTD SALARY', 250000)).toBe('cat-income');
+    expect(cat("PAK'NSAVE KILBIRNIE")).toBe('cat-groceries');
+  });
+});
