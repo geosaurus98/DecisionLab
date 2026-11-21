@@ -2,34 +2,33 @@
 
 Ordered by value to the core loop (understand → decide → simulate → learn). Each item lists the main design notes.
 
-## Next milestone (recommended): “Uncertainty and reality”
+## Done in milestone 2 (“Uncertainty and reality”)
 
-1. **Monte Carlo simulation** (Scenario Lab + decision Financial tab, optional toggle).
-   Monthly log-normal returns from annual mean/volatility (convert arithmetic ↔ geometric explicitly), seeded `mulberry32` + Box–Muller (already in `src/engine/random.ts`), fees/tax/inflation identical to the deterministic engine, percentiles (type 7) P10/P25/P50/P75/P90, probability of reaching a target, fan chart + histogram. Run in a Web Worker for ≥ 10k paths. Tests: zero volatility equals deterministic result, seed reproducibility, percentile correctness, convergence of mean. UI copy: “a distribution of outcomes under these assumptions, not a probability forecast”.
-2. **Link decisions to actual transactions**: tag transactions to a decision (or match by date range/merchant) so a review’s actual cost is computed from data (*Known*) instead of typed (*Manual*).
-3. **Manual transaction entry and split transactions** (e.g. split a supermarket shop into groceries + household).
-4. **Custom period comparison** (any two date ranges) and a month detail drill-down from charts.
+Monte Carlo simulation (Web Worker, seeded, common random numbers), linking transactions to decisions for measured actual costs, manual transactions, split transactions, custom period comparison.
+
+## Next milestone (recommended): “Decide with less friction”
+
+1. **Category budgets / targets** with variance tracking per month, feeding monthly capacity (planned vs actual discretionary spending).
+2. **Cost–benefit scatter** (score vs total cost) with the Pareto frontier, and **pairwise (AHP) weighting** with a consistency ratio as an alternative to direct weights.
+3. **Create a decision from a Scenario Lab set** (and open a decision’s alternatives in the Lab).
+4. **Goals linked to projections**: pick a Goal as the target; progress from an account balance.
+5. **Review reminders** in the installed PWA (local notifications), and a “due for review” badge in navigation.
 
 ## Then
 
-5. Pairwise (AHP) weighting as an alternative to direct weights, with consistency ratio.
-6. Cost–benefit scatter chart (score vs total cost) with the Pareto frontier.
+6. Monte Carlo extensions: historical bootstrap of returns, fat-tailed (Student-t) returns, uncertain inflation, sequence-of-returns stress tests.
 7. Criterion-level preference insights: which criteria you weight highly vs which predicted satisfaction (needs ≥ 10 reviews).
-8. Create a decision from a Scenario Lab set; open a decision’s alternatives in the Lab.
-9. Goals linked to projections (target from a Goal, progress from an account balance).
-10. Budget/target per category with variance tracking.
-11. Edit recurring series (confirm, rename, set expected amount), and upcoming-bill calendar.
-12. Review reminders (local notifications in the installed PWA).
-13. Bank-specific CSV presets for major NZ banks (ANZ, ASB, BNZ, Westpac, Kiwibank) once verified against real exports — profiles are already supported.
-14. Opening-balance reconstruction from a statement balance column to show account balance history.
+8. Edit recurring series (confirm, rename, set expected amount), and upcoming-bill calendar.
+9. Bank-specific CSV presets for major NZ banks (ANZ, ASB, BNZ, Westpac, Kiwibank) once verified against real exports — profiles are already supported.
+10. Opening-balance reconstruction from a statement balance column to show account balance history.
 
 ## Later / optional
 
-15. Optional automatic encrypted backups to a user-chosen folder (File System Access API on desktop).
-16. Optional local passphrase lock with encryption at rest (requires key management UX; current guidance relies on device security).
-17. Optional sync between devices (end-to-end encrypted, explicit opt-in).
-18. Desktop packaging (Tauri) with SQLite storage.
-19. Akahu (NZ open banking) integration — explicit consent, documented data flows; only if manual CSV becomes a real burden.
+11. Optional automatic encrypted backups to a user-chosen folder (File System Access API on desktop).
+12. Optional local passphrase lock with encryption at rest (requires key management UX; current guidance relies on device security).
+13. Optional sync between devices (end-to-end encrypted, explicit opt-in).
+14. Desktop packaging (Tauri) with SQLite storage.
+15. Akahu (NZ open banking) integration — explicit consent, documented data flows; only if manual CSV becomes a real burden.
 
 ## Technical debt / quality
 

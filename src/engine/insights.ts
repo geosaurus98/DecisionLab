@@ -11,6 +11,8 @@ export const MIN_SAMPLE_FOR_PATTERN = 5;
 export interface CalibrationSummary {
   reviewed: number;
   costSample: number;
+  /** How many of the cost observations were measured from linked transactions (vs typed in). */
+  linkedCostSample: number;
   /** Median relative cost error, (actual − predicted) / predicted. Positive = underestimated. */
   medianCostError: number | null;
   /** Share of decisions where actual cost exceeded prediction by more than 5%. */
@@ -47,6 +49,7 @@ export function calibrate(decisions: Decision[]): CalibrationSummary {
   return {
     reviewed: reviewed.length,
     costSample: costPairs.length,
+    linkedCostSample: costPairs.filter((p) => p.d.review!.actualCostSource === 'linked').length,
     medianCostError: costPairs.length ? median(costPairs.map((p) => p.err)) : null,
     underestimatedShare: costPairs.length ? costPairs.filter((p) => p.err > 0.05).length / costPairs.length : null,
     satisfactionSample: satPairs.length,

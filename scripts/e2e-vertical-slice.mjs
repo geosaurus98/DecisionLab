@@ -117,6 +117,7 @@ try {
   // 4. Decision
   await page.getByRole('button', { name: 'New decision' }).first().click();
   await page.waitForURL(/#\/decisions\/dec_/);
+  const decisionUrl = page.url();
   await page.fill('#d-title', 'Japan trip or invest');
   const names = page.locator('input[id^="o-name-"]');
   await names.nth(0).fill('Japan trip');
@@ -148,6 +149,12 @@ try {
   ok(`deterministic projection compares alternatives (${row.replace(/\s+/g, ' ').trim()})`);
   await snap('decision-finance');
 
+  await page.getByText('Simulate uncertain investment returns').click();
+  await expectText('Outcomes at the horizon', 20000);
+  const diffRow = await page.locator('tr', { hasText: 'Japan trip − Invest the money' }).textContent();
+  if (!/0% of runs/.test(diffRow)) throw new Error(`expected the trip to trail investing on every path: ${diffRow}`);
+  ok('Monte Carlo (Web Worker) shows outcome ranges and the trip trails investing on 0% of runs');
+
   // 5. Decide and record
   await page.getByRole('tab', { name: '4 · Decide' }).click();
   await page.getByRole('radio', { name: /Japan trip/ }).check();
@@ -168,14 +175,40 @@ try {
   await expectText('6.0% return');
   ok('editing live assumptions does not rewrite the recorded snapshot');
 
-  // 6. Review outcome
+  // 6. Manual entry and split transactions
+  await page.goto(`${BASE}#/transactions`);
+  await page.getByRole('button', { name: 'Add transaction' }).click();
+  await page.fill('#mt-date', '2026-11-05');
+  await page.fill('#mt-amount', '3450');
+  await page.fill('#mt-desc', 'JAPAN TRAVEL AGENCY');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expectText('Transaction added');
+  ok('manual transaction added (cash or anything missing from a bank export)');
+  await page.getByRole('button', { name: /Countdown Kelburn/ }).first().click();
+  await page.getByRole('button', { name: 'Split…' }).click();
+  await page.getByLabel('Part 1 amount').fill('92.40');
+  await page.getByLabel('Part 2 amount').fill('20');
+  await page.getByLabel('Part 2 category').selectOption({ label: 'Shopping' });
+  await expectText('Parts add up to the transaction');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expectText('Split · 2 categories');
+  ok('transaction split across Groceries and Shopping with exact-cent validation');
+
+  // 7. Review outcome with the actual cost measured from linked transactions
+  await page.goto(decisionUrl);
   await page.getByRole('tab', { name: '5 · Review outcome' }).click();
-  await page.fill('#rv-cost', '3450');
+  await page.getByRole('button', { name: 'Find transactions' }).click();
+  await page.getByLabel('Search transactions').fill('japan');
+  await page.getByRole('checkbox', { name: /JAPAN TRAVEL AGENCY/ }).check();
+  await page.getByRole('button', { name: /Link 1 selected/ }).click();
+  await expectText('Actual cost from linked transactions: $3,450.00');
+  await page.getByRole('button', { name: /Use linked total/ }).click();
   await page.fill('#rv-less', 'Budget for transport inside Japan.');
   await page.getByRole('button', { name: 'Save review' }).click();
   await expectText('Predicted vs actual');
   await expectText('+15%');
-  ok('outcome review compares predicted and actual cost (+15%)');
+  ok('actual cost measured from a linked transaction; review shows +15% vs prediction');
+  await snap('decision-review');
   await page.goto(`${BASE}#/insights`);
   await expectText('Based on only 1 reviewed decision');
   ok('insights show sample size and caution with little data');

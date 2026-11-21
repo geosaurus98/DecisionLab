@@ -249,8 +249,12 @@ export function TransactionDetail({ txn, onClose, accountName, categories }: { t
                 <Button size="sm" variant="ghost" onClick={() => setSplits([...splits, { id: newId('spl'), amount: null, categoryId: null, note: '' }])}>
                   + Add part
                 </Button>
-                <span className={`ml-auto text-xs ${remaining === 0 ? 'text-good' : 'text-warn'}`}>
-                  {remaining === 0 ? 'Parts add up to the transaction ✓' : `${formatMoney(Math.abs(remaining))} ${Math.sign(remaining) === sign ? 'still to allocate' : 'over-allocated'}`}
+                <span role="status" className={`ml-auto text-xs ${splitErrors.length === 0 ? 'text-good' : 'text-warn'}`}>
+                  {remaining !== 0
+                    ? `${formatMoney(Math.abs(remaining))} ${Math.sign(remaining) === sign ? 'still to allocate' : 'over-allocated'}`
+                    : splitErrors.length === 0
+                      ? 'Parts add up to the transaction ✓'
+                      : splitErrors[0]}
                 </span>
               </div>
               <p className="text-xs text-muted">Enter parts as positive amounts; they take the transaction’s direction ({txn.amount < 0 ? 'money out' : 'money in'}).</p>

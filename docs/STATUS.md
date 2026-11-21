@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated: November 2026 (milestone 1: foundation + end-to-end vertical slice).
+Last updated: November 2026 — milestone 1 (foundation + vertical slice) and milestone 2 (“Uncertainty and reality”: Monte Carlo, linked actual costs, manual and split transactions, custom period comparison).
 
 Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 
@@ -14,7 +14,7 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Local persistence (Dexie/IndexedDB) | ✅ | Versioned schema, persistent-storage request |
 | Shared domain models | ✅ | `src/domain/types.ts` |
 | Synthetic demonstration dataset | ✅ | Seeded, loaded through the real import pipeline, labelled, removable |
-| Testing infrastructure | ✅ | Vitest (114 tests) + Playwright E2E |
+| Testing infrastructure | ✅ | Vitest (132 tests) + Playwright E2E (17 steps) |
 | Export/import (backup/restore), encrypted backup | ✅ | zod-validated, AES-GCM |
 | PWA / offline | 🟡 | Manifest + service worker caching the app shell; install prompt UX not customised |
 
@@ -26,7 +26,9 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Multiple accounts and imports, import history, undo | ✅ | |
 | Duplicate detection | ✅ | Occurrence-aware |
 | Original values kept for audit | ✅ | Visible in transaction details |
-| Search, filters, editing (category, notes) | ✅ | Manual transaction entry ⬜ |
+| Search, filters, editing (category, notes) | ✅ | |
+| Manual transaction entry | ✅ | Dedupes against later imports; deletable |
+| Split transactions | ✅ | Exact-cent validation; analytics use split parts |
 | Editable categories (kind, essential, colour, archive) | ✅ | |
 | Rule-based categorisation (create, reorder, enable/disable, regex, re-apply) | ✅ | |
 | Learning from corrections (merchant memory) | ✅ | |
@@ -35,7 +37,7 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Spending by category, trends, essential vs discretionary | ✅ | |
 | Recurring payments | ✅ | Dismissable; editing a detected series ⬜ |
 | Spending anomalies | ✅ | Robust z-score |
-| Period comparison | ✅ | Month vs previous 3 months; arbitrary custom ranges ⬜ |
+| Period comparison | ✅ | Month vs previous 3 months, or any two custom date ranges |
 | Financial flexibility with provenance | ✅ | |
 
 ## Phase 3 — ChoiceLedger
@@ -51,7 +53,7 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Decision journal with search/filter | ✅ | |
 | Immutable snapshots, snapshot history on reopen | ✅ | |
 | Outcome reviews with predicted vs actual | ✅ | |
-| Preference insights / calibration with sample sizes | 🟡 | Cost, satisfaction, repeat rate, confidence; criterion-level over/under-valuation ⬜ |
+| Preference insights / calibration with sample sizes | 🟡 | Cost (incl. how many measured from linked transactions), satisfaction, repeat rate, confidence; criterion-level over/under-valuation ⬜ |
 
 ## Phase 4 — FutureRegret
 
@@ -64,7 +66,7 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Opportunity-cost comparison | ✅ | |
 | Sensitivity (tornado) | ✅ | |
 | Charts comparing scenarios | ✅ | With table view |
-| Monte Carlo simulation | ⬜ | Next milestone; seeded PRNG already in place |
+| Monte Carlo simulation | ✅ | Log-normal returns, seeded, Web Worker, fan chart, histogram, target/shortfall/loss probabilities, differences with common random numbers; summary frozen in decision snapshots |
 
 ## Phase 5 — Integration
 
@@ -74,12 +76,12 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Decision options become projection scenarios | ✅ |
 | Snapshot stores assumptions, projections and available funds | ✅ |
 | Review dates surface on Overview | ✅ |
-| Link a decision to actual transactions (actual cost from matched spending) | ⬜ |
+| Link a decision to actual transactions (actual cost from matched spending) | ✅ |
 | Create a decision from a Scenario Lab set (and vice versa) | ⬜ |
 
 ## Phase 6 — Advanced
 
-Not started beyond anomalies and basic calibration. See [BACKLOG.md](BACKLOG.md).
+Anomalies, basic calibration and Monte Carlo are done. See [BACKLOG.md](BACKLOG.md).
 
 ## Known limitations
 
@@ -87,3 +89,5 @@ Not started beyond anomalies and basic calibration. See [BACKLOG.md](BACKLOG.md)
 - Multi-currency is not supported (NZD only).
 - Large datasets (> ~50k transactions) are untested for UI performance.
 - Recurring detection uses merchant keys; merchants whose description changes every month may be missed.
+- Monte Carlo assumes independent monthly returns and fixed inflation (no crash clustering or fat tails).
+- Split parts are categorised manually; rules do not create splits.

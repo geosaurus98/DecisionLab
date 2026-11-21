@@ -14,6 +14,8 @@ flowchart LR
     Repo --> Engine
     Repo --> Data
     SW[Service worker<br/>offline app shell]
+    WW[Web Worker<br/>Monte Carlo] --> Engine
+    Hooks -->|post assumptions| WW
   end
   CSV[Bank CSV file] -->|File API, never uploaded| Repo
   Repo -->|JSON / AES-GCM backup| File[Backup file]
@@ -26,7 +28,8 @@ flowchart LR
 | Domain | `src/domain` | Entity types, integer-cent money, ISO dates, ids | nothing |
 | Engines | `src/engine` | Pure, deterministic calculations | domain |
 | Data | `src/data` | Dexie schema, repositories, import pipeline, decision snapshots, backup/encryption, demo dataset | domain, engine |
-| Hooks | `src/hooks` | Reactive queries (`useLiveQuery`) + memoised engine results | data, engine |
+| Hooks | `src/hooks` | Reactive queries (`useLiveQuery`) + memoised engine results; `useMonteCarlo` runs simulations in a Web Worker | data, engine |
+| Workers | `src/workers` | Off-main-thread computation (Monte Carlo) | engine |
 | UI | `src/ui` | Accessible primitives, chart conventions, theme, toasts | domain |
 | Features | `src/features/*` | Pages: overview, transactions, spending, decisions, scenarios, insights, settings | all of the above |
 
@@ -46,9 +49,12 @@ flowchart TD
   D --> S[MCDA score + weight sensitivity]
   D --> PR[Projection per option<br/>option costs → scenario flows]
   PR --> TS[Tornado sensitivity]
+  PR --> MC[Monte Carlo ranges<br/>same month step]
+  MC --> SN
   S --> SN[Snapshot at choice time<br/>immutable]
   PR --> SN
   FX --> SN
+  T -->|linked payments| RV
   SN --> RV[Outcome review]
   RV --> IN[Insights: calibration with sample sizes]
 ```
@@ -87,7 +93,9 @@ Runtime dependencies: react, react-dom, react-router-dom, dexie, dexie-react-hoo
 6. **Money is not silently mixed into preference scores.** The weighted score covers subjective/measured criteria; costs and projections are shown side by side, with a Pareto (“efficient/dominated”) indicator.
 7. **Immutable decision snapshots.** Decisions store their own copy of assumptions; recording a choice freezes a snapshot. Reopening moves it to `snapshotHistory`.
 8. **Provenance everywhere.** Values are tagged *Known* (computed from data), *Estimated* (inferred) or *Manual* (entered).
-9. **Hash-based code splitting** per page keeps the initial bundle small; charts load with the pages that use them.
+9. **One month-step function** (`stepMonth`) shared by the deterministic and Monte Carlo engines, so both apply identical timing, fee and tax conventions; Monte Carlo with zero volatility reproduces the deterministic projection exactly (tested).
+10. **Split-aware analytics**: category analytics run on analysis lines (split parts or whole transactions), never directly on transactions.
+11. **Route-based code splitting** per page keeps the initial bundle small; charts load with the pages that use them.
 
 ## Technical risks and mitigations
 
@@ -96,12 +104,12 @@ Runtime dependencies: react, react-dom, react-router-dom, dexie, dexie-react-hoo
 | Browser storage eviction or the user clearing site data | `navigator.storage.persist()` requested; status shown in Settings; backup/restore with encryption |
 | Bank CSV variety | Configurable mapping, header-row detection, multiple date formats, debit/credit or signed amounts, saved mapping profiles; per-row errors instead of failing the import |
 | Recurring detection false positives | Confidence score, “possibly ended” flag, dismiss/restore, manual override of obligations |
-| Users reading projections as forecasts | “Illustrative” labelling, nominal vs real toggle, sensitivity analysis, assumptions stored with each decision |
+| Users reading projections as forecasts | “Illustrative” labelling, nominal vs real toggle, sensitivity analysis, Monte Carlo caveats (independent returns, precision ≠ accuracy), assumptions stored with each decision |
 | Spurious insights from little data | Sample sizes on every insight; pattern wording only at n ≥ 5 |
 | Schema evolution | Versioned Dexie schema, backup versioning with `migrateBackup`, data-layer tests |
 
 ## Testing strategy
 
-- **Unit tests** (`src/**/__tests__`): money/date parsing, CSV mapping, dedupe, categorisation, cash flow, recurring detection, flexibility, scoring and weight sensitivity, projection (checked against closed-form annuity formulas), sensitivity, anomalies, calibration.
-- **Data-layer tests** with `fake-indexeddb`: import/undo/re-import, memory-based corrections, rule reordering, snapshot immutability, backup round trip, invalid backups, encryption, demo data.
-- **End-to-end** (`scripts/e2e-vertical-slice.mjs`, Playwright): the full import → analyse → decide → review workflow in Chromium.
+- **Unit tests** (`src/**/__tests__`): money/date parsing, CSV mapping, dedupe, categorisation, cash flow, recurring detection, flexibility, scoring and weight sensitivity, projection (checked against closed-form annuity formulas), sensitivity, Monte Carlo (zero-volatility equivalence, seed reproducibility, mean convergence, percentile ordering, common random numbers), splits, decision links, anomalies, calibration.
+- **Data-layer tests** with `fake-indexeddb`: import/undo/re-import, memory-based corrections, rule reordering, snapshot immutability, backup round trip, v1 → v2 backup migration, invalid backups, encryption, demo data, manual entry dedupe, splits, decision links.
+- **End-to-end** (`scripts/e2e-vertical-slice.mjs`, Playwright): the full import → analyse → decide (incl. Monte Carlo) → manual entry and splits → link actual payments → review workflow in Chromium (17 steps).

@@ -1,6 +1,6 @@
 # Data model
 
-Source of truth: [`src/domain/types.ts`](../src/domain/types.ts). Storage: IndexedDB database `decisionlab`, defined in [`src/data/db.ts`](../src/data/db.ts) (schema version 1).
+Source of truth: [`src/domain/types.ts`](../src/domain/types.ts). Storage: IndexedDB database `decisionlab`, defined in [`src/data/db.ts`](../src/data/db.ts) (schema version 2).
 
 ## Conventions
 
@@ -32,14 +32,14 @@ erDiagram
 | --- | --- | --- | --- |
 | `accounts` | `id` | `Account` | Optional manual `balance {amount, asOf}`; `includeInLiquid` controls flexibility; `isDemo` for synthetic data |
 | `categories` | `id`, `sortOrder` | `Category` | `kind`: income / expense / transfer / savings; `essential` for expenses; `archived` instead of deleting used categories |
-| `transactions` | `id`, `accountId`, `importId`, `date`, `categoryId`, `merchant`, `fingerprint` | `Transaction` | `amount` signed cents; `merchant` normalised key; `categorySource`: rule / memory / manual / none; `original` = raw CSV row for audit |
+| `transactions` | `id`, `accountId`, `importId`, `date`, `categoryId`, `merchant`, `fingerprint`, `decisionId` | `Transaction` | `amount` signed cents; `merchant` normalised key; `categorySource`: rule / memory / manual / none; `original` = raw CSV row for audit; optional `splits[]` and `decisionId` |
 | `rules` | `id`, `priority` | `CategoryRule` | field (description/merchant), operator (contains/startsWith/equals/regex), direction, optional account; lower priority runs first |
 | `merchantMemory` | `merchant` | `MerchantMemory` | Learned from manual corrections; outranks rules |
 | `imports` | `id`, `accountId`, `importedAt` | `ImportBatch` | Mapping used, counts, date range; `status: active/undone` (kept after undo for history) |
 | `importProfiles` | `id` | `ImportProfile` | Saved CSV column mappings |
 | `goals` | `id` | `Goal` | `earmarked` amounts are excluded from available funds |
 | `decisions` | `id`, `status`, `date`, `reviewDate`, `updatedAt` | `Decision` | Embeds options, criteria, score matrix, its own `ProjectionAssumptions`, `snapshot`, `snapshotHistory`, `review` |
-| `scenarioSets` | `id`, `updatedAt` | `ScenarioSet` | Base assumptions + variants (one-off and recurring flows, contribution change) |
+| `scenarioSets` | `id`, `updatedAt` | `ScenarioSet` | Base assumptions + variants (one-off and recurring flows, contribution change) + optional `monteCarlo` config |
 | `settings` | `key` | key–value | `financialProfile`, `defaultAssumptions`, `seeded`, `dismissedRecurring` |
 
 UI-only preferences (theme) are kept in `localStorage`, never financial data.
@@ -57,7 +57,9 @@ UI-only preferences (theme) are kept in `localStorage`, never financial data.
 | `categoryId` / `categorySource` / `ruleId` | | Current category and how it was assigned |
 | `fingerprint` | string | `account|date|amount|DESCRIPTION|occurrence` — used for duplicate detection |
 | `original` | Record<string,string> | Untouched CSV row |
-| `importId` | string \| null | Batch that created it (null = manual) |
+| `importId` | string \| null | Batch that created it (null = entered manually) |
+| `splits` | TransactionSplit[]? | `{id, amount, categoryId, note}` parts summing exactly to `amount`; analytics use these when present |
+| `decisionId` | string? | Decision this payment belongs to; used to measure actual cost |
 
 ### Decision
 
@@ -65,10 +67,11 @@ UI-only preferences (theme) are kept in `localStorage`, never financial data.
 - `criteria[]`: `name`, `type` (`rating` 0–10 or `measure`), `direction` (higher/lower is better), `weight` (relative), `unit`.
 - `scores[optionId][criterionId]`: number or null.
 - `assumptions`: the decision's own copy of projection assumptions (not a reference to global defaults).
+- `monteCarlo?`: `{enabled, annualVolatility, runs, seed}` for the optional uncertainty simulation.
 - `selectedOptionId`, `reasoning`, `predictedSatisfaction` (1–10), `confidence` (1–5), `reviewDate`.
-- `snapshot`: `DecisionSnapshot` — deep copy of options, criteria, scores, ranking, assumptions, projected financials per option, available funds, predictions and predicted cost, captured when the choice is recorded. **Never rewritten.**
+- `snapshot`: `DecisionSnapshot` — deep copy of options, criteria, scores, ranking, assumptions, projected financials per option, available funds, predictions, predicted cost and (if enabled) Monte Carlo P10/median/P90 per option, captured when the choice is recorded. **Never rewritten.**
 - `snapshotHistory[]`: earlier snapshots when a choice was reopened before review.
-- `review`: actual cost, satisfaction, expectations met, would repeat, benefits, unexpected consequences, lessons.
+- `review`: actual cost (with `actualCostSource`: `linked` from transactions or `manual`), satisfaction, expectations met, would repeat, benefits, unexpected consequences, lessons.
 
 Status lifecycle: `considering → decided → completed (optional) → reviewed`. Reviewed decisions cannot be reopened (duplicate instead).
 
@@ -78,9 +81,16 @@ Status lifecycle: `considering → decided → completed (optional) → reviewed
 
 ## Backups
 
-Format `decisionlab-backup` version 1: `{ format, version, exportedAt, data: { <table>: rows[] } }`. Encrypted backups (`decisionlab-encrypted-backup`) wrap the same JSON: `{ kdf: {PBKDF2, SHA-256, iterations, salt}, cipher: {AES-GCM, iv}, ciphertext }` (base64).
+Format `decisionlab-backup` version 2 (version 1 files are migrated on restore): `{ format, version, exportedAt, data: { <table>: rows[] } }`. Encrypted backups (`decisionlab-encrypted-backup`) wrap the same JSON: `{ kdf: {PBKDF2, SHA-256, iterations, salt}, cipher: {AES-GCM, iv}, ciphertext }` (base64).
 
 Restore: parse → `migrateBackup` (rejects unknown/newer formats) → zod validation of every row → replace all tables in a single IndexedDB transaction.
+
+## Schema history
+
+| Version | Change | Migration |
+| --- | --- | --- |
+| 1 | Initial schema | — |
+| 2 | `transactions.decisionId` index; optional `splits`, `decisionId`, `monteCarlo`, `actualCostSource` fields | None needed (new fields are optional). Backups v1 → v2 unchanged. |
 
 ## Migrations
 

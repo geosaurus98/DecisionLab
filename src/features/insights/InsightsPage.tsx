@@ -52,7 +52,7 @@ export function InsightsPage() {
             <Metric
               label="Cost estimates"
               value={cal.medianCostError === null ? '—' : `${cal.medianCostError > 0 ? '+' : ''}${formatPercent(cal.medianCostError, 0)}`}
-              sub={`median actual vs predicted · n=${cal.costSample}`}
+              sub={`median actual vs predicted · n=${cal.costSample} (${cal.linkedCostSample} measured from linked transactions)`}
               definition="Median of (actual cost − predicted cost) ÷ predicted cost. Positive means costs were higher than you expected."
             />
             <Metric

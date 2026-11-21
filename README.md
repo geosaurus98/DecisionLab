@@ -10,7 +10,7 @@ DecisionLab combines three connected tools:
 | --- | --- |
 | **SpendLens** | Import bank CSVs, categorise transactions with rules, analyse cash flow, spending, recurring payments and how much you can realistically spend. |
 | **ChoiceLedger** | Structure decisions: alternatives, weighted criteria, a transparent score, sensitivity to your weights, a frozen record of your reasoning, and later outcome reviews. |
-| **FutureRegret** | Deterministic projections (compound growth, contributions, fees, tax, inflation) to compare the financial consequences of alternatives, with sensitivity analysis. |
+| **FutureRegret** | Deterministic projections (compound growth, contributions, fees, tax, inflation) and optional Monte Carlo ranges to compare the financial consequences of alternatives, with sensitivity analysis. |
 
 All data stays in your browser (IndexedDB). There is no server, account, analytics or tracking.
 
@@ -34,7 +34,7 @@ Open the printed URL (usually http://localhost:5173). On first launch, either **
 
 | Command | Purpose |
 | --- | --- |
-| `npm test` | Unit and data-layer tests (Vitest, 114 tests) |
+| `npm test` | Unit and data-layer tests (Vitest, 132 tests) |
 | `npm run typecheck` | TypeScript strict type check |
 | `npm run build` | Type check + production build into `dist/` |
 | `npm run preview` | Serve the production build locally (enables offline/PWA support) |
@@ -45,19 +45,19 @@ The production build is a static site: you can serve `dist/` from any static hos
 ## Using DecisionLab
 
 1. **Import transactions** (Transactions → Import CSV). Choose the file and account, confirm the suggested column mapping (date format, signed amount or debit/credit columns, description columns), review the preview (new / duplicate / error rows), then import. Every import can be undone from *Import history*. The original CSV values are kept on each transaction for auditing.
-2. **Categorise.** Default rules cover common NZ merchants. Change a category in the table and, with “apply to the same merchant” ticked, DecisionLab remembers it. Manual choices are never overwritten. Manage rules (order, enable/disable, regex) under *Categorisation rules*. Mark transfers between your accounts as **Transfers** so they are not counted as spending or income.
-3. **Analyse** (Spending). Monthly cash flow, spending by category, trends, period comparisons, recurring payments and unusually large transactions, all from complete calendar months.
+2. **Categorise.** Default rules cover common NZ merchants. Change a category in the table and, with “apply to the same merchant” ticked, DecisionLab remembers it. Manual choices are never overwritten. Manage rules (order, enable/disable, regex) under *Categorisation rules*. Mark transfers between your accounts as **Transfers** so they are not counted as spending or income. Open a transaction to **split** it across categories, add notes, or link it to a decision; use **Add transaction** for cash.
+3. **Analyse** (Spending). Monthly cash flow, spending by category, trends, period comparisons (a month vs the previous three, or any two date ranges), recurring payments and unusually large transactions, all from complete calendar months.
 4. **Set your plan** (Settings). Enter account balances, an emergency reserve, savings commitment, upcoming expenses and goals. The Overview then shows **money available now** and **monthly discretionary capacity**, with each line marked *Known*, *Estimated* or *Manual*.
-5. **Make a decision** (Decisions → New decision). Add alternatives with upfront/ongoing costs, criteria with weights, and scores. *Compare* shows the transparent weighted score and whether the ranking is fragile. *Financial impact* projects each alternative’s effect on your savings, with opportunity cost and a sensitivity (tornado) analysis. *Decide* records your choice, reasoning, predicted satisfaction and review date as an immutable snapshot.
-6. **Review outcomes** when the review date arrives (shown on the Overview). Enter what actually happened; DecisionLab compares prediction with reality. *Insights* summarises calibration across decisions — always with sample sizes.
+5. **Make a decision** (Decisions → New decision). Add alternatives with upfront/ongoing costs, criteria with weights, and scores. *Compare* shows the transparent weighted score and whether the ranking is fragile. *Financial impact* projects each alternative’s effect on your savings, with opportunity cost, a sensitivity (tornado) analysis and optional **Monte Carlo** ranges for uncertain returns. *Decide* records your choice, reasoning, predicted satisfaction and review date as an immutable snapshot.
+6. **Review outcomes** when the review date arrives (shown on the Overview). Link the real payments so the actual cost is measured from your data, then record what actually happened; DecisionLab compares prediction with reality. *Insights* summarises calibration across decisions — always with sample sizes.
 7. **Explore** freely in the *Scenario Lab* (spend vs invest, buy now vs later, savings-rate changes, recurring costs, working fewer hours).
 8. **Back up** regularly (Settings → Data & privacy). Encrypted backups use AES-256-GCM with a passphrase.
 
 ## Screenshots
 
-| Spending analysis | Decision: financial impact | Mobile (dark) |
+| Spending analysis | Monte Carlo ranges | Mobile (dark) |
 | --- | --- | --- |
-| ![Spending](docs/screenshots/spending.png) | ![Finance](docs/screenshots/decision-finance.png) | ![Mobile](docs/screenshots/mobile-decision-dark.png) |
+| ![Spending](docs/screenshots/spending.png) | ![Monte Carlo](docs/screenshots/monte-carlo.png) | ![Mobile](docs/screenshots/mobile-decision-dark.png) |
 
 All screenshots use synthetic data.
 

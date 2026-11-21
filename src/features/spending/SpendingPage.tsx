@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Line, ComposedChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
-import { Badge, Button, Card, CategoryDot, EmptyState, InfoTip, Metric, PageHeader, Segmented, Select, Spinner } from '@/ui/components';
+import { Badge, Button, Card, CategoryDot, EmptyState, InfoTip, Input, Metric, PageHeader, Segmented, Select, Spinner } from '@/ui/components';
 import { ChartWithTable, MoneyTooltip, SERIES, NEUTRAL, SimpleTable, axisProps, moneyTick } from '@/ui/charts';
 import { useAnalytics } from '@/hooks/useAppData';
 import { categoryTrend, comparePeriods, spendingByCategory, summarise } from '@/engine/cashflow';
 import { findAnomalies } from '@/engine/anomalies';
-import { addMonths, firstDayOfMonth, formatDate, formatMonth, lastDayOfMonth, monthRange } from '@/domain/dates';
+import { addMonths, firstDayOfMonth, formatDate, formatMonth, isIsoDate, lastDayOfMonth, monthRange } from '@/domain/dates';
 import { formatMoney, formatPercent } from '@/domain/money';
 import { merchantLabel } from '@/engine/merchant';
 import { DEFINITIONS } from '@/ui/definitions';
@@ -50,7 +50,12 @@ export function SpendingPage() {
   }, [byCategory, a.lines, a.categoryMap, months]);
 
   const target = compareMonth || a.lastComplete;
+  const [compareMode, setCompareMode] = useState<'month' | 'custom'>('month');
+  const [rangeA, setRangeA] = useState({ start: firstDayOfMonth(addMonths(a.lastComplete, -5)), end: lastDayOfMonth(addMonths(a.lastComplete, -3)) });
+  const [rangeB, setRangeB] = useState({ start: firstDayOfMonth(addMonths(a.lastComplete, -2)), end: lastDayOfMonth(a.lastComplete) });
+  const customValid = isIsoDate(rangeA.start) && isIsoDate(rangeA.end) && isIsoDate(rangeB.start) && isIsoDate(rangeB.end) && rangeA.start <= rangeA.end && rangeB.start <= rangeB.end;
   const comparison = useMemo(() => {
+    if (compareMode === 'custom') return customValid ? comparePeriods(a.lines, a.categoryMap, rangeA, rangeB) : [];
     const baselineStart = addMonths(target, -3);
     return comparePeriods(
       a.lines,
@@ -58,7 +63,9 @@ export function SpendingPage() {
       { start: firstDayOfMonth(baselineStart), end: lastDayOfMonth(addMonths(target, -1)) },
       { start: firstDayOfMonth(target), end: lastDayOfMonth(target) },
     );
-  }, [a.lines, a.categoryMap, target]);
+  }, [a.lines, a.categoryMap, target, compareMode, rangeA, rangeB, customValid]);
+  const headerA = compareMode === 'custom' ? `${formatDate(rangeA.start)} – ${formatDate(rangeA.end)} /mo` : '3-month baseline';
+  const headerB = compareMode === 'custom' ? `${formatDate(rangeB.start)} – ${formatDate(rangeB.end)} /mo` : formatMonth(target);
 
   const anomalies = useMemo(() => findAnomalies(a.lines, a.categoryMap, { since: range?.start }), [a.lines, a.categoryMap, range?.start]);
   const txnById = useMemo(() => new Map(a.transactions.map((t) => [t.id, t])), [a.transactions]);
@@ -233,21 +240,50 @@ export function SpendingPage() {
 
           <Card
             title="What changed?"
-            description="Spending in the selected month vs the average of the three months before it (both normalised to a 30.4-day month)."
+            description={
+              compareMode === 'month'
+                ? 'Spending in the selected month vs the average of the three months before it (both normalised to a 30.4-day month).'
+                : 'Spending in two date ranges of your choice, each normalised to a 30.4-day month so different lengths compare fairly.'
+            }
             actions={
-              <Select aria-label="Month to compare" value={target} onChange={(e) => setCompareMonth(e.target.value)} className="w-40">
-                {monthRange(a.completeMonths[0]?.month ?? a.lastComplete, a.lastComplete)
-                  .reverse()
-                  .map((m) => (
-                    <option key={m} value={m}>
-                      {formatMonth(m)}
-                    </option>
-                  ))}
-              </Select>
+              <div className="flex flex-wrap items-center gap-2">
+                <Segmented
+                  ariaLabel="Comparison type"
+                  value={compareMode}
+                  onChange={setCompareMode}
+                  options={[
+                    { value: 'month', label: 'Month' },
+                    { value: 'custom', label: 'Custom ranges' },
+                  ]}
+                />
+                {compareMode === 'month' && (
+                  <Select aria-label="Month to compare" value={target} onChange={(e) => setCompareMonth(e.target.value)} className="w-40">
+                    {monthRange(a.completeMonths[0]?.month ?? a.lastComplete, a.lastComplete)
+                      .reverse()
+                      .map((m) => (
+                        <option key={m} value={m}>
+                          {formatMonth(m)}
+                        </option>
+                      ))}
+                  </Select>
+                )}
+              </div>
             }
           >
+            {compareMode === 'custom' && (
+              <div className="mb-3 grid gap-3 sm:grid-cols-2">
+                {([['Period A', rangeA, setRangeA], ['Period B', rangeB, setRangeB]] as const).map(([label, r, setR]) => (
+                  <fieldset key={label} className="grid grid-cols-2 gap-2">
+                    <legend className="mb-1 text-sm font-medium">{label}</legend>
+                    <Input aria-label={`${label} start`} type="date" value={r.start} onChange={(e) => setR({ ...r, start: e.target.value })} />
+                    <Input aria-label={`${label} end`} type="date" value={r.end} onChange={(e) => setR({ ...r, end: e.target.value })} />
+                  </fieldset>
+                ))}
+                {!customValid && <p className="text-sm text-bad sm:col-span-2">Each period needs a start date on or before its end date.</p>}
+              </div>
+            )}
             <SimpleTable
-              headers={['Category', '3-month baseline', formatMonth(target), 'Change']}
+              headers={['Category', headerA, headerB, 'Change']}
               align={['left', 'right', 'right', 'right']}
               rows={comparison.slice(0, 10).map((c) => [
                 catName(c.categoryId),

@@ -21,7 +21,7 @@ Every number DecisionLab shows is defined here. Code references point to the imp
 - **Net cash flow** = income + uncategorised inflows − spending − savings contributions.
 - **Savings rate** = (income − spending) / income; undefined (shown “—”) when income ≤ 0.
 - **Complete months only**: monthly analytics and estimates exclude the current, partial month.
-- **Period comparison** normalises both periods to a 30.4375-day month.
+- **Period comparison** (a month vs the three before it, or any two custom date ranges) normalises both periods to a 30.4375-day month.
 - **Likely transfers**: an outflow and an equal inflow in different accounts within 3 days, neither already a transfer — suggested, never applied automatically.
 
 ## Categorisation (`src/engine/categorise.ts`)
@@ -86,6 +86,34 @@ Monthly time step; month 0 = `startMonth`; balances are reported at the **end** 
 
 **Opportunity cost** = final real balance of an alternative − the best alternative's final real balance.
 
+## Monte Carlo simulation (`src/engine/montecarlo.ts`)
+
+Optional. Repeats the projection many times with random monthly returns; everything else (cash flows, timing, fees, tax, inflation) is identical to the deterministic engine, which it calls one month at a time (`stepMonth`).
+
+- **Return model**: annual gross return 1 + R is log-normal with arithmetic mean μ (*expected annual return*) and standard deviation σ (*annual volatility*):
+  s² = ln(1 + σ²/(1 + μ)²), m = ln(1 + μ) − s²/2. Monthly log returns are independent N(m/12, s²/12), so 12 months compound to that annual distribution. The monthly return is exp(x) − 1.
+- **Consistency checks (tested)**: with σ = 0 every path equals the deterministic projection exactly; for a lump sum without fees or tax the *mean* outcome converges to the deterministic value, while the *median* is lower (volatility drag: compounding of uncertain returns).
+- **Common random numbers**: within a run, all alternatives experience the same return path. Differences between alternatives (P10/median/P90 of A − B, and the share of runs where A ends ahead) therefore isolate the decision itself.
+- **Reported**: percentiles P10, P25, P50, P75, P90 and the mean, at up to ~60 sampled months (always including the final month); probability of ending at or above the target, of reaching it at any month-end, of the balance ever going negative, and of ending below starting balance + net cash flows ("below money put in"). Real values use the fixed inflation assumption.
+- **Percentiles**: linear interpolation between closest ranks (type 7).
+- **Randomness**: `mulberry32` seeded PRNG + Box–Muller normals; same inputs and seed ⇒ identical results on every platform. Runs: 100–20,000 (default 2,000), computed in a Web Worker.
+- **Limitations** (stated in the UI): independent returns (no crashes clustering, momentum, mean reversion, fat tails or regime changes), fixed inflation, no sequence of fee changes. More runs make the percentiles more precise *for this model*, not more accurate as forecasts.
+- Volatility presets are rough guides only: cash ≈ 0.5%, conservative ≈ 5%, balanced ≈ 9%, growth ≈ 12%, aggressive ≈ 16% per year.
+- When enabled on a decision, P10/median/P90 of each option's final real balance are frozen in the snapshot when the choice is recorded.
+
+## Split transactions (`src/engine/splits.ts`)
+
+A transaction can be allocated to several categories. Parts must be non-zero, share the transaction's direction and sum **exactly** (in cents) to its amount, so totals never change. All category analytics run on *analysis lines* (one per split part, or one per unsplit transaction). The transaction's displayed category is the largest part's category; rules never override a split.
+
+## Manual transactions
+
+Entered with the same base key as imports (`account|date|amount|DESCRIPTION`), so importing a statement that contains the same transaction later marks it as a duplicate. Only manual transactions can be deleted individually; imported ones are removed by undoing their import.
+
+## Decision actual cost from linked transactions (`src/engine/decisionLink.ts`)
+
+- Actual cost = −Σ amounts of transactions linked to the decision (payments add, refunds/resale subtract). Shown as **Known**; a typed-in actual cost is **Manual**, and the review records which was used (`actualCostSource`).
+- Suggestions: outflows from 7 days before the decision to 180 days after, not linked elsewhere, scored by words (≥ 4 letters) shared with the decision title or chosen option, and by an amount within 25% of the expected cost. Manual search covers a year either side.
+
 ## Sensitivity analysis (`src/engine/sensitivity.ts`)
 
 One-at-a-time: each assumption is perturbed down and up while others stay fixed, and the projection is **re-run** with the changed assumption: return ±2 pp, inflation ±1 pp, fees ±0.5 pp, contribution ±20%, horizon ±25%. The metric is either one variant's final real balance or the difference between two variants. Results are sorted by swing (tornado).
@@ -98,7 +126,7 @@ Per expense category with ≥ 8 outflows: robust z = (x − median) / (1.4826 ×
 
 From decisions with both a snapshot and a review:
 
-- cost error = (actual − predicted) / predicted; median reported; “underestimated” = error > 5%;
+- cost error = (actual − predicted) / predicted; median reported; “underestimated” = error > 5%; the number of costs measured from linked transactions is shown;
 - satisfaction gap = actual − predicted (mean);
 - would-repeat share, per category and per confidence level.
 
@@ -110,4 +138,4 @@ Percentiles use linear interpolation between closest ranks (Hyndman–Fan type 7
 
 ## Random numbers (`src/engine/random.ts`)
 
-`mulberry32` seeded PRNG (32-bit integer arithmetic, platform-independent) and Box–Muller normals; used for the reproducible demo dataset and reserved for Monte Carlo simulation.
+`mulberry32` seeded PRNG (32-bit integer arithmetic, platform-independent) and Box–Muller normals; used for the reproducible demo dataset and Monte Carlo simulation.

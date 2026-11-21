@@ -58,7 +58,9 @@ function FindTransactionsModal({ open, onClose, decision: d }: { open: boolean; 
   const toast = useToast();
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const from = addDays(d.date, -7);
+  // Searching covers a year either side of the decision (deposits are often paid early);
+  // automatic suggestions use the tighter window in suggestLinks.
+  const from = addDays(d.date, -365);
   const candidates = useLiveQuery(
     () => (open ? db.transactions.where('date').between(from, addDays(d.date, 400), true, true).toArray() : Promise.resolve([] as Transaction[])),
     [open, from, d.date],
@@ -113,8 +115,9 @@ function FindTransactionsModal({ open, onClose, decision: d }: { open: boolean; 
       <div className="grid gap-3">
         <Input aria-label="Search transactions" placeholder="Search description or amount (shows suggestions when empty)" value={query} onChange={(e) => setQuery(e.target.value)} />
         <p className="text-xs text-muted">
-          Transactions from {formatDate(from)} onwards. Suggestions match words from the decision or chosen alternative, or an amount close to the expected cost. Linking a
-          transaction already linked to another decision moves it here.
+          Search covers {formatDate(from)} to {formatDate(addDays(d.date, 400))}. Suggestions (shown when the search is empty) are outflows from a week before the decision
+          onwards that mention words from the decision or chosen alternative, or are close to the expected cost. Linking a transaction already linked to another decision
+          moves it here.
         </p>
         {rows.length === 0 ? (
           <p className="py-4 text-center text-sm text-ink-2">{query ? 'No matching transactions.' : 'No suggestions — search for the payments instead.'}</p>
