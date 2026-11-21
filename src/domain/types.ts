@@ -173,6 +173,8 @@ export interface ImportBatch {
   dateRange?: { start: IsoDate; end: IsoDate };
   status: 'active' | 'undone';
   undoneAt?: Timestamp;
+  /** Closing balance stated by this file (balance column or summary lines), if any. */
+  statementBalance?: { amount: Cents; asOf: IsoDate };
   isDemo?: boolean;
 }
 

@@ -363,7 +363,8 @@ describe('milestone 4: statement balances, overrides, schema v4', () => {
   it('stores printed balances, sets the account statement balance and recomputes it on undo', async () => {
     const accountId = await setupAccount();
     const p1 = await previewImport(accountId, parseCsvText(BAL_CSV).rows, BAL_MAP);
-    expect(p1.closingBalance).toEqual({ amount: 98000, asOf: '2026-03-05', rowId: '1' });
+    expect(p1.closingBalance).toEqual({ amount: 98000, asOf: '2026-03-05' });
+    expect(p1.closingBalanceSource).toBe('column');
     expect(p1.balanceGaps).toEqual([]);
     const first = await commitImport({ accountId, fileName: 'mar.csv', mapping: BAL_MAP, preview: p1 });
     expect((await db.accounts.get(accountId))!.statementBalance).toEqual({ amount: 98000, asOf: '2026-03-05', importId: first.id });
@@ -438,5 +439,31 @@ describe('demo statement balances', () => {
       const opening = a.name.includes('Savings') ? 400_000 : 120_000;
       expect(a.statementBalance!.amount).toBe(opening + txns.reduce((s, t) => s + t.amount, 0));
     }
+  });
+});
+
+describe('summary balances (e.g. Heartland exports)', () => {
+  const FILE = ['Generated at 9:05 am Mon 2 Mar 2026', '', 'Some Bank', 'Everyday Saver', '00-0000-0000000-000', '$1,234.56 balance with $1,234.56 available as at Mon 2 Mar 2026', '', 'Date,Transaction Code,Transaction Reference,Amount', '', '01/03/2026,PRC,Credit Interest,$2.60', '01/02/2026,ICT,Opening deposit,$1231.96'].join('\r\n');
+  const MAP: CsvMapping = { dateColumn: 'Date', dateFormat: 'DD/MM/YYYY', amountMode: 'signed', amountColumn: 'Amount', descriptionColumns: ['Transaction Reference'], referenceColumn: 'Transaction Code' };
+
+  it('uses the stated balance as a known balance, reports a complete history, and clears it on undo', async () => {
+    const accountId = await setupAccount();
+    const parsed = parseCsvText(FILE);
+    const p = await previewImport(accountId, parsed.rows, MAP, parsed.preamble.statementBalance);
+    expect(p.closingBalance).toEqual({ amount: 123456, asOf: '2026-03-02' });
+    expect(p.closingBalanceSource).toBe('summary');
+    expect(p.impliedOpening).toEqual({ amount: 0, before: '2026-02-01' });
+    const batch = await commitImport({ accountId, fileName: 'h.csv', mapping: MAP, preview: p });
+    expect((await db.imports.get(batch.id))!.statementBalance).toEqual({ amount: 123456, asOf: '2026-03-02' });
+    expect((await db.accounts.get(accountId))!.statementBalance).toEqual({ amount: 123456, asOf: '2026-03-02', importId: batch.id });
+    await undoImport(batch.id);
+    expect((await db.accounts.get(accountId))!.statementBalance).toBeUndefined();
+  });
+
+  it('ignores a stated balance older than the file’s transactions', async () => {
+    const accountId = await setupAccount();
+    const parsed = parseCsvText(FILE);
+    const p = await previewImport(accountId, parsed.rows, MAP, { amount: 1, asOf: '2026-02-15' });
+    expect(p.closingBalance).toBeNull();
   });
 });

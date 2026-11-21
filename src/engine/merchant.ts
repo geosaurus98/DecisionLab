@@ -27,8 +27,12 @@ export function normaliseMerchant(description: string): string {
   let s = description.toUpperCase();
   s = s.replace(/\b\d{4}[-\s*]*[\d*]{4}[-\s*]*[\d*]{4}[-\s*]*\d{4}\b/g, ' '); // card numbers
   s = s.replace(/\b(CARD|C\/D)\s*\*?\d{3,4}\b/g, ' ');
+  s = s.replace(/\b\d{4}[:/-]\d{2}[:/-]\d{2}\b/g, ' '); // embedded timestamps' dates, e.g. 2026:07:11 (Heartland POS)
   s = s.replace(/\b\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?\b/g, ' '); // dates
-  s = s.replace(/\b\d{1,2}:\d{2}(:\d{2})?\b/g, ' '); // times
+  s = s.replace(/\b\d{1,2}:\d{2}(:\d{2}(\.\d+)?)?\b/g, ' '); // times, incl. fractional seconds
+  s = s.replace(/\b(19|20)\d{2}\b/g, ' '); // stray years
+  s = s.replace(/\b\d{1,2}-[A-Z]{3}-\d{2,4}\b/g, ' '); // 12-NOV-26 style dates
+  s = s.replace(/\b\d{1,2}\.\d{2}\.\d{2}(\.\d+)?(\s*(AM|PM))?\b/g, ' '); // 10.15.32.123456 AM style times
   s = s.replace(/[*#]+\s*\w*\d\w*/g, ' '); // reference tails like *AB12C or #1234
   s = s.replace(/[^A-Z0-9&' ]+/g, ' ');
   s = s.replace(/\s+/g, ' ').trim();

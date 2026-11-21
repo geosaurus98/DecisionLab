@@ -38,7 +38,7 @@ erDiagram
 | `transactions` | `id`, `accountId`, `importId`, `date`, `categoryId`, `merchant`, `fingerprint`, `decisionId` | `Transaction` | `amount` signed cents; `merchant` normalised key; `categorySource`: rule / memory / manual / none; `original` = raw CSV row for audit; optional `splits[]`, `decisionId`, `balanceAfter` (printed running balance) and `rowIndex` (position in file) |
 | `rules` | `id`, `priority` | `CategoryRule` | field (description/merchant), operator (contains/startsWith/equals/regex), direction, optional account; lower priority runs first |
 | `merchantMemory` | `merchant` | `MerchantMemory` | Learned from manual corrections; outranks rules |
-| `imports` | `id`, `accountId`, `importedAt` | `ImportBatch` | Mapping used, counts, date range; `status: active/undone` (kept after undo for history) |
+| `imports` | `id`, `accountId`, `importedAt` | `ImportBatch` | Mapping used, counts, date range, optional `statementBalance` stated by the file; `status: active/undone` (kept after undo for history) |
 | `importProfiles` | `id` | `ImportProfile` | Saved CSV column mappings |
 | `goals` | `id` | `Goal` | `earmarked` amounts are excluded from available funds; optional `accountId` uses that account's balance as the saved amount |
 | `decisions` | `id`, `status`, `date`, `reviewDate`, `updatedAt` | `Decision` | Embeds options, criteria, score matrix, its own `ProjectionAssumptions`, `snapshot`, `snapshotHistory`, `review` |

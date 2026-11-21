@@ -22,8 +22,8 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 
 | Item | Status | Notes |
 | --- | --- | --- |
-| CSV import wizard with mapping, preview, NZ formats, debit/credit | ✅ | Header-row detection, saved mappings, bank presets (🟡 unverified against real exports) |
-| Statement balances, reconciliation, balance history | ✅ | Known balance from the balance column; gaps reported |
+| CSV import wizard with mapping, preview, NZ formats, debit/credit | ✅ | Header-row detection, saved mappings, bank presets: Heartland ✅ verified with real exports; ASB/ANZ/BNZ/Westpac/Kiwibank 🟡 unverified |
+| Statement balances, reconciliation, balance history | ✅ | Known balance from a balance column or the file's summary lines; gaps and implied opening balance reported |
 | Multiple accounts and imports, import history, undo | ✅ | |
 | Duplicate detection | ✅ | Occurrence-aware |
 | Original values kept for audit | ✅ | Visible in transaction details |
@@ -94,5 +94,5 @@ Anomalies, basic calibration and Monte Carlo are done. See [BACKLOG.md](BACKLOG.
 - Recurring detection uses merchant keys; merchants whose description changes every month may be missed.
 - Monte Carlo assumes independent monthly returns and fixed inflation (no crash clustering or fat tails).
 - Split parts are categorised manually; rules do not create splits.
-- Bank presets have not been verified against real exports (see BANK_PRESETS.md).
+- Presets other than Heartland have not been verified against real exports (see BANK_PRESETS.md).
 - A balance column is only read from the file being imported; balances typed manually are not reconciled against transactions.

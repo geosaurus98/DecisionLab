@@ -16,7 +16,7 @@ Bank CSV presets with header detection (unverified), statement balance reading w
 
 ## Next milestone (recommended): “Verify and learn”
 
-1. **Verify bank presets** with your real exports (needs your input — see BANK_PRESETS.md).
+1. **Verify the remaining bank presets** (Heartland is done) if you have accounts elsewhere — see BANK_PRESETS.md.
 2. **Criterion-level preference insights**: which criteria and weights best predicted satisfaction (shown only with ≥ 10 reviews, with uncertainty).
 3. **Monte Carlo extensions**: historical bootstrap / fat-tailed returns, uncertain inflation, sequence-of-returns stress test.
 4. **Automatic encrypted backups** to a user-chosen folder (File System Access API on desktop) with reminders.

@@ -28,6 +28,7 @@ Every number DecisionLab shows is defined here. Code references point to the imp
 
 - If a statement has a running-balance column, each transaction stores the printed `balanceAfter` and its row position.
 - **File order**: oldest-first or newest-first, from the first and last dates; if every row has the same date, from which direction the printed balances agree with the amounts.
+- **Summary balance**: some banks (e.g. Heartland) state the balance in summary lines above the table (“$X balance … as at <date>”). It is used as the closing balance when the file has no balance column and no transaction is dated after it. The preview also shows the *implied opening balance* (stated balance − Σ amounts); $0 means the file contains the account's complete history.
 - **Closing balance** = the chronologically last printed balance (plus any later transactions without one). On import it becomes the account's *statement balance* (provenance **Known**) if it is at least as recent as the existing one; undoing that import recomputes it from the remaining transactions.
 - **Current balance** used everywhere = the more recent of the statement balance and a manually entered balance (ties favour the statement).
 - **Reconciliation**: between two consecutive printed balances, the transactions in between must sum exactly to the difference. Any mismatch is reported as a gap (date range, expected, printed, difference) — usually a missing statement period or a duplicated transaction.
@@ -35,7 +36,13 @@ Every number DecisionLab shows is defined here. Code references point to the imp
 
 ## Bank presets (`src/engine/csvPresets.ts`)
 
-Header signatures for ASB, ANZ, BNZ, Westpac and Kiwibank exports pre-fill the mapping. They are **unverified** (based on publicly described layouts) until checked against a real export — see [BANK_PRESETS.md](BANK_PRESETS.md). Every row is still validated, and failures are shown, not imported.
+Header signatures pre-fill the mapping. Heartland Bank is verified against real exports; ASB, ANZ, BNZ, Westpac and Kiwibank are **unverified** (based on publicly described layouts) until checked against a real export — see [BANK_PRESETS.md](BANK_PRESETS.md). Every row is still validated, and failures are shown, not imported.
+
+## Robust row handling
+
+- Header detection skips summary lines; a line containing a money amount is never taken as the header.
+- A blank description does not reject a transaction (that would break balance reconciliation); the reference/code column, or “(no description)”, is used instead.
+- Merchant keys strip card numbers, dates, times (including fractional seconds and `12-NOV-26 10.15.32 AM` styles), embedded `YYYY:DD:MM` timestamps, stray years and long reference codes.
 
 ## Categorisation (`src/engine/categorise.ts`)
 

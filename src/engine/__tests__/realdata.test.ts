@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { detectPreset } from '../csvPresets';
+import { normaliseMerchant } from '../merchant';
+import { categorise, sortRules } from '../categorise';
+import { defaultRules } from '@/data/seed';
 import { mapRows, parseCsvText, suggestMapping } from '../csv';
 import { balanceGaps, balanceSeries, chronological, closingBalance, fileOrder } from '../balances';
 import { applyOverrides, billsBeforeNextIncome, detectRecurring, occurrences, stepCadence, upcomingBills, type RecurringSeries } from '../recurring';
@@ -175,5 +178,61 @@ describe('flexibility with statement balances and payday bills', () => {
     const bills = res.availableNowLines.find((l) => l.label.startsWith('Bills due'))!;
     expect(bills).toMatchObject({ amount: -31000, provenance: 'estimated' }); // transfer excluded
     expect(res.availableNow).toBe(300000 - 31000);
+  });
+});
+
+describe('Heartland Bank layout (synthetic rows in the verified format)', () => {
+  // Invented data in the same structure as a real Heartland export: summary lines, header,
+  // blank line, newest-first rows, $-prefixed signed amounts, CRLF line endings.
+  const HEARTLAND = [
+    'Generated at 9:05 am Mon 2 Mar 2026',
+    '',
+    'Heartland Bank',
+    'Everyday Saver',
+    '00-0000-0000000-000',
+    '$1,234.56 balance with $1,234.56 available as at Mon 2 Mar 2026',
+    '',
+    'Date,Transaction Code,Transaction Reference,Amount',
+    '',
+    '01/03/2026,TAX,Withholding Tax,-$0.85',
+    '01/03/2026,PRC,Credit Interest,$2.60',
+    '28/02/2026,POS,POS: Corner Bakery Wellington NZ 2026:28:02 08:01:59.123456,-$6.50',
+    '27/02/2026,POS,POS: Corner Bakery Wellington NZ 27-FEB-26 07.58.10.654321 AM,-$5.00',
+    '20/02/2026,AAT, ,-$100.00',
+    '15/02/2026,DPN,TD Deposit,-$500.00',
+    '01/02/2026,ICT,Opening deposit,$1844.31',
+  ].join('\r\n');
+
+  it('detects the preset, reads the summary balance and maps every row', () => {
+    const parsed = parseCsvText(HEARTLAND);
+    expect(parsed.headers).toEqual(['Date', 'Transaction Code', 'Transaction Reference', 'Amount']);
+    expect(parsed.preamble.statementBalance).toEqual({ amount: 123456, asOf: '2026-03-02' });
+    expect(parsed.preamble.accountName).toBe('Everyday Saver');
+    const preset = detectPreset(parsed.headers)!;
+    expect(preset.id).toBe('heartland');
+    expect(preset.verified).toEqual({ on: '2026-11-21' });
+    const rows = mapRows(parsed.rows, preset.mapping);
+    expect(rows.every((r) => r.errors.length === 0)).toBe(true);
+    expect(rows.map((r) => r.amount)).toEqual([-85, 260, -650, -500, -10000, -50000, 184431]);
+    expect(rows[4]!.description).toBe('(AAT)'); // blank description falls back to the code
+    expect(rows.reduce((a, r) => a + r.amount!, 0)).toBe(123456); // full history reconciles
+    expect(fileOrder(rows.map((r) => ({ date: r.date!, amount: r.amount! })))).toBe('newestFirst');
+  });
+
+  it('removes both embedded timestamp styles from card purchases', () => {
+    const a = normaliseMerchant('POS: Corner Bakery Wellington NZ 2026:28:02 08:01:59.123456');
+    const b = normaliseMerchant('POS: Corner Bakery Wellington NZ 27-FEB-26 07.58.10.654321 AM');
+    expect(a).toBe('CORNER BAKERY WELLINGTON NZ');
+    expect(b).toBe(a);
+    expect(normaliseMerchant('POS: Store 1234 Petone NZ 2026:01:03 10:00:00.1')).toBe('STORE 1234 PETONE NZ');
+  });
+
+  it('categorises interest net of withholding tax, and term-deposit placements as transfers', () => {
+    const rules = sortRules(defaultRules());
+    const cat = (d: string, amount: number) => categorise({ description: d, merchant: normaliseMerchant(d), amount, accountId: 'a' }, rules, new Map()).categoryId;
+    expect(cat('Credit Interest', 260)).toBe('cat-income');
+    expect(cat('Withholding Tax', -85)).toBe('cat-income');
+    expect(cat('TD Deposit', -50000)).toBe('cat-transfers');
+    expect(cat('Internal Transfer', 100000)).toBe('cat-transfers');
   });
 });

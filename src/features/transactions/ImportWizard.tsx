@@ -70,6 +70,7 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
       const detected = detectPreset(p.headers);
       setPreset(detected);
       setMapping(detected ? detected.mapping : suggestMapping(p));
+      if (p.preamble.accountName) setNewAccountName((n) => n || p.preamble.accountName!);
     } catch (e) {
       setFileError(e instanceof Error ? e.message : 'Could not read the file.');
     }
@@ -88,7 +89,7 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
         accId = await saveAccount({ name: newAccountName.trim(), type: newAccountType, includeInLiquid: newAccountType !== 'credit' && newAccountType !== 'investment' });
         setAccountId(accId);
       }
-      setPreview(await previewImport(accId, parsed.rows, mapping as CsvMapping));
+      setPreview(await previewImport(accId, parsed.rows, mapping as CsvMapping, parsed.preamble.statementBalance));
       setStep('preview');
     } finally {
       setBusy(false);
@@ -368,8 +369,16 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
           </p>
           {preview.closingBalance && (
             <p className="text-sm">
-              Closing balance in this statement: <strong className="tabular">{formatMoney(preview.closingBalance.amount)}</strong> on {formatDate(preview.closingBalance.asOf)}{' '}
-              <Badge tone="good">Known</Badge> — it becomes the account’s current balance if it is the most recent.
+              {preview.closingBalanceSource === 'summary' ? 'Balance stated in the file’s summary' : 'Closing balance in this statement'}:{' '}
+              <strong className="tabular">{formatMoney(preview.closingBalance.amount)}</strong> on {formatDate(preview.closingBalance.asOf)} <Badge tone="good">Known</Badge> — it
+              becomes the account’s current balance if it is the most recent.
+              {preview.impliedOpening && (
+                <span className="block text-xs text-muted">
+                  {preview.impliedOpening.amount === 0
+                    ? 'The transactions add up exactly to this balance from zero, so the file contains the account’s complete history.'
+                    : `Implied balance before ${formatDate(preview.impliedOpening.before)}: ${formatMoney(preview.impliedOpening.amount)}.`}
+                </span>
+              )}
             </p>
           )}
           {preview.balanceGaps.length > 0 && (

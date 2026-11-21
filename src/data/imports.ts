@@ -24,13 +24,21 @@ export interface ImportPreview {
   counts: Record<PreviewStatus, number>;
   dateRange?: { start: string; end: string };
   netTotal: number;
-  /** Closing balance printed in this file (when a balance column is mapped). */
+  /** Closing balance stated by this file: from its balance column, or its summary lines. */
   closingBalance?: { amount: number; asOf: string } | null;
+  closingBalanceSource?: 'column' | 'summary';
+  /** Balance before the file's first transaction implied by the closing balance (0 ⇒ complete history). */
+  impliedOpening?: { amount: number; before: string } | null;
   /** Places where the file's own running balance does not reconcile with its amounts. */
   balanceGaps: BalanceGap[];
 }
 
-export async function previewImport(accountId: string, rows: Record<string, string>[], mapping: CsvMapping): Promise<ImportPreview> {
+export async function previewImport(
+  accountId: string,
+  rows: Record<string, string>[],
+  mapping: CsvMapping,
+  summaryBalance?: { amount: number; asOf: string },
+): Promise<ImportPreview> {
   const mapped = mapRows(rows, mapping);
   const [existing, rules, memory] = await Promise.all([
     db.transactions.where('accountId').equals(accountId).toArray(),
@@ -57,8 +65,16 @@ export async function previewImport(accountId: string, rows: Record<string, stri
     .filter((r) => r.status !== 'error')
     .map((r) => ({ id: String(r.rowNumber), date: r.date!, amount: r.amount!, balanceAfter: r.balance ?? null, rowIndex: r.rowNumber - 1, importId: 'file' }));
   const hasBalances = fileRows.some((r) => r.balanceAfter != null);
+  const fromColumn = hasBalances ? closingBalance(fileRows) : null;
+  // A summary balance only applies if no transaction in the file is dated after it.
+  const lastDate = fileRows.map((r) => r.date).sort().at(-1);
+  const fromSummary = !fromColumn && summaryBalance && (!lastDate || lastDate <= summaryBalance.asOf) ? summaryBalance : null;
+  const closing = fromColumn ?? fromSummary;
+  const firstDate = fileRows.map((r) => r.date).sort()[0];
   return {
-    closingBalance: hasBalances ? closingBalance(fileRows) : null,
+    closingBalance: closing ? { amount: closing.amount, asOf: closing.asOf } : null,
+    closingBalanceSource: fromColumn ? 'column' : fromSummary ? 'summary' : undefined,
+    impliedOpening: closing && firstDate ? { amount: closing.amount - fileRows.reduce((a, r) => a + r.amount, 0), before: firstDate } : null,
     balanceGaps: hasBalances ? balanceGaps(fileRows) : [],
     rows: out,
     counts,
@@ -87,6 +103,7 @@ export async function commitImport(args: {
     duplicateCount: preview.counts.duplicate,
     errorCount: preview.counts.error,
     dateRange: preview.dateRange,
+    statementBalance: preview.closingBalance ? { amount: preview.closingBalance.amount, asOf: preview.closingBalance.asOf } : undefined,
     status: 'active',
     isDemo: args.isDemo,
   };
@@ -141,12 +158,21 @@ export async function undoImport(importId: string): Promise<number> {
     // If this import supplied the account's statement balance, recompute it from what remains.
     const account = await db.accounts.get(batch.accountId);
     if (account?.statementBalance?.importId === importId) {
-      const remaining = await db.transactions.where('accountId').equals(batch.accountId).toArray();
-      const closing = closingBalance(remaining);
-      const source = closing ? remaining.find((t) => t.id === closing.rowId) : undefined;
-      await db.accounts.update(batch.accountId, {
-        statementBalance: closing && source?.importId ? { amount: closing.amount, asOf: closing.asOf, importId: source.importId } : undefined,
-      });
+      // Prefer the newest balance stated by another active import of this account…
+      const others = (await db.imports.where('accountId').equals(batch.accountId).toArray())
+        .filter((b) => b.id !== importId && b.status === 'active' && b.statementBalance)
+        .sort((a, b) => b.statementBalance!.asOf.localeCompare(a.statementBalance!.asOf));
+      let next: { amount: number; asOf: string; importId: string } | undefined = others[0]
+        ? { ...others[0].statementBalance!, importId: others[0].id }
+        : undefined;
+      // …or one reconstructed from printed running balances on the remaining transactions.
+      if (!next) {
+        const remaining = await db.transactions.where('accountId').equals(batch.accountId).toArray();
+        const closing = closingBalance(remaining);
+        const source = closing ? remaining.find((t) => t.id === closing.rowId) : undefined;
+        if (closing && source?.importId) next = { amount: closing.amount, asOf: closing.asOf, importId: source.importId };
+      }
+      await db.accounts.update(batch.accountId, { statementBalance: next });
     }
     return removed;
   });

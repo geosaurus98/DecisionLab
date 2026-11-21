@@ -18,6 +18,43 @@ export interface ParsedCsv {
   rows: Record<string, string>[];
   /** Problems found while parsing (malformed quotes, ragged rows…). */
   warnings: string[];
+  /** Information from lines before the header row, when the bank includes a summary. */
+  preamble: Preamble;
+}
+
+export interface Preamble {
+  lines: string[];
+  /** Balance stated in the summary, e.g. "$1005.74 balance with $1005.74 available as at Sat 21 Nov 2026". */
+  statementBalance?: { amount: Cents; asOf: IsoDate };
+  /** Account name/type line if recognisable (suggested name for a new account). */
+  accountName?: string;
+}
+
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+/**
+ * Read a bank's summary lines above the CSV header. Only the stated balance and an account
+ * name are extracted; account numbers are not stored.
+ */
+export function parsePreamble(lines: string[]): Preamble {
+  const clean = lines.map((l) => l.replace(/^\uFEFF/, '').trim()).filter((l) => l !== '');
+  const out: Preamble = { lines: clean };
+  for (const l of clean) {
+    const m = /^(-?\$?-?[\d,]+\.\d{2})\s+balance\b.*\bas at\s+(?:[A-Za-z]{3,9},?\s+)?(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})/i.exec(l);
+    if (m) {
+      const amount = parseMoney(m[1]!);
+      const month = MONTHS.indexOf(m[3]!.slice(0, 3).toLowerCase()) + 1;
+      const date = month > 0 ? parseDate(`${m[2]}/${String(month).padStart(2, '0')}/${m[4]}`, 'DD/MM/YYYY') : null;
+      if (amount !== null && date) out.statementBalance = { amount, asOf: date };
+    }
+  }
+  // Heuristic account name: a short line that is neither the bank name, a timestamp, an account
+  // number nor the balance line (e.g. "Everyday Saver", "Notice Saver").
+  const candidates = clean.filter(
+    (l) => l.length <= 40 && !/generated|bank$|balance|^\d{2}-\d{4}-\d{7}-\d{2,3}$/i.test(l) && !/^[\d\s-]+$/.test(l) && !l.includes(','),
+  );
+  if (candidates.length) out.accountName = candidates[candidates.length - 1];
+  return out;
 }
 
 /**
@@ -28,9 +65,11 @@ export function parseCsvText(text: string, opts: { skipLeadingLines?: number } =
   if (text.length > MAX_CSV_BYTES) {
     throw new Error(`File is larger than ${MAX_CSV_BYTES / 1024 / 1024} MB. Split it into smaller statements.`);
   }
-  let body = text.replace(/^﻿/, ''); // strip UTF-8 BOM
+  let body = text.replace(/^\uFEFF/, ''); // strip UTF-8 BOM
   const skip = opts.skipLeadingLines ?? findHeaderRow(body);
-  if (skip > 0) body = body.split(/\r?\n/).slice(skip).join('\n');
+  const allLines = body.split(/\r?\n/);
+  const preamble = parsePreamble(allLines.slice(0, skip));
+  if (skip > 0) body = allLines.slice(skip).join('\n');
 
   const result = Papa.parse<Record<string, string>>(body, {
     header: true,
@@ -49,7 +88,7 @@ export function parseCsvText(text: string, opts: { skipLeadingLines?: number } =
     for (const h of headers) clean[h] = r[h] ?? '';
     return clean;
   });
-  return { headers, rows, warnings };
+  return { headers, rows, warnings, preamble };
 }
 
 /**
@@ -59,7 +98,11 @@ export function parseCsvText(text: string, opts: { skipLeadingLines?: number } =
 export function findHeaderRow(text: string): number {
   const lines = text.split(/\r?\n/).slice(0, 15);
   for (let i = 0; i < lines.length; i++) {
-    const fields = lines[i]!.split(',').map((f) => f.replace(/"/g, '').trim());
+    const line = lines[i]!;
+    // Summary lines such as "$1,234.56 balance with …" split on their thousands separators;
+    // a header never contains a money amount.
+    if (/\$\s?-?\d|\d,\d{3}\.\d{2}/.test(line)) continue;
+    const fields = line.split(',').map((f) => f.replace(/"/g, '').trim());
     if (fields.length < 3) continue;
     const textual = fields.filter((f) => f !== '' && !/^[-$\d.,/()]+$/.test(f)).length;
     if (textual >= Math.ceil(fields.length * 0.6)) return i;
@@ -188,8 +231,10 @@ export function mapRows(rows: Record<string, string>[], mapping: CsvMapping): Ma
       .join(' ')
       .replace(/\s+/g, ' ')
       .trim();
-    if (!description) errors.push('Empty description.');
     const reference = mapping.referenceColumn ? row[mapping.referenceColumn] || undefined : undefined;
+    // A blank description must not drop a real transaction (it would break balances); fall back
+    // to the reference/code column, or a placeholder.
+    const finalDescription = description || (reference ? `(${reference})` : '(no description)');
     let balance: Cents | null | undefined;
     if (mapping.balanceColumn) {
       const raw = row[mapping.balanceColumn] ?? '';
@@ -198,7 +243,7 @@ export function mapRows(rows: Record<string, string>[], mapping: CsvMapping): Ma
       balance = raw.trim() === '' ? null : parseMoney(raw);
     }
 
-    return { rowNumber: i + 1, date, amount, description, reference, balance, original: { ...row }, errors };
+    return { rowNumber: i + 1, date, amount, description: finalDescription, reference, balance, original: { ...row }, errors };
   });
 }
 

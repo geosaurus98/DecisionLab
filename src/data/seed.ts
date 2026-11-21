@@ -37,7 +37,9 @@ type RuleSeed = [name: string, pattern: string, categoryId: string, direction?: 
 const RULE_SEEDS: RuleSeed[] = [
   // Savings, then transfers, run first so e.g. "Transfer to Sharesies" is savings, never spending.
   ['Investments and KiwiSaver', 'sharesies|kernel|simplicity|kiwisaver|inv360|hatch|smartshares', 'cat-savings'],
-  ['Internal transfers', 'transfer to|transfer from|tfr to|tfr from|internet transfer|online transfer', 'cat-transfers'],
+  ['Internal transfers', 'transfer to|transfer from|tfr to|tfr from|internet transfer|online transfer|internal transfer|td deposit', 'cat-transfers'],
+  // Resident withholding tax on interest is netted against interest income (income category).
+  ['Withholding tax on interest', 'withholding tax|\\brwt\\b', 'cat-income'],
   ['Salary', 'salary|payroll|wages', 'cat-income', 'in'],
   ['Interest', 'interest', 'cat-income', 'in'],
   ['Countdown / Woolworths', 'countdown|woolworths', 'cat-groceries'],

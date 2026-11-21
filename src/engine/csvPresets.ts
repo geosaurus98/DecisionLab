@@ -25,6 +25,15 @@ const m = (p: Omit<CsvMapping, 'amountMode'> & { amountMode?: CsvMapping['amount
 
 export const BANK_PRESETS: BankPreset[] = [
   {
+    id: 'heartland',
+    bank: 'Heartland Bank',
+    signature: ['Date', 'Transaction Code', 'Transaction Reference', 'Amount'],
+    mapping: m({ dateColumn: 'Date', dateFormat: 'DD/MM/YYYY', amountColumn: 'Amount', descriptionColumns: ['Transaction Reference'], referenceColumn: 'Transaction Code' }),
+    verified: { on: '2026-11-21' },
+    notes:
+      'Heartland exports list newest transactions first and state the account balance in the summary above the table; DecisionLab reads it as the statement balance. Withholding tax on interest is netted against interest income.',
+  },
+  {
     id: 'asb',
     bank: 'ASB',
     signature: ['Date', 'Unique Id', 'Tran Type', 'Payee', 'Memo', 'Amount'],
