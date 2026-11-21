@@ -44,9 +44,13 @@ flowchart TD
   CF --> FX[Flexibility estimate<br/>available now · monthly capacity]
   RC --> FX
   P[Profile, balances, goals<br/>manual inputs] --> FX
+  B[Category budgets] --> FX
+  B -->|pace vs actual| CF
   FX -->|prefills starting balance &<br/>savings in new decisions| D[Decision]
   FX -->|share of available funds| D
-  D --> S[MCDA score + weight sensitivity]
+  D --> S[MCDA score + weight sensitivity<br/>direct or AHP pairwise weights]
+  SL[Scenario Lab set] <-->|convert| D
+  G[Goal] -->|target + date| PR
   D --> PR[Projection per option<br/>option costs → scenario flows]
   PR --> TS[Tornado sensitivity]
   PR --> MC[Monte Carlo ranges<br/>same month step]
@@ -63,6 +67,7 @@ Key shared interfaces:
 
 - **`optionToVariant(option)`** (engine/projection) turns a decision alternative's upfront and monthly costs into scenario cash flows, so decisions and the Scenario Lab use one projection engine.
 - **`estimateFlexibility(...)`** (engine/flexibility) is used by the Overview, decision financial tab and snapshot.
+- **`variantToOption` / `scenarioFromDecision`** convert between Scenario Lab variants and decision alternatives without changing projections (tested).
 - **`DecisionSnapshot`** freezes options, criteria, scores, ranking, assumptions, projected financials, available funds and predictions when a choice is recorded.
 
 ## Technology choices

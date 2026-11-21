@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated: November 2026 — milestone 1 (foundation + vertical slice) and milestone 2 (“Uncertainty and reality”: Monte Carlo, linked actual costs, manual and split transactions, custom period comparison).
+Last updated: November 2026 — milestone 1 (foundation + vertical slice) milestone 2 (“Uncertainty and reality”) and milestone 3 (“Decide with less friction”: budgets, pairwise weighting, cost-vs-preference chart, Scenario Lab ↔ decisions, goal targets, review reminders).
 
 Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 
@@ -14,7 +14,7 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Local persistence (Dexie/IndexedDB) | ✅ | Versioned schema, persistent-storage request |
 | Shared domain models | ✅ | `src/domain/types.ts` |
 | Synthetic demonstration dataset | ✅ | Seeded, loaded through the real import pipeline, labelled, removable |
-| Testing infrastructure | ✅ | Vitest (132 tests) + Playwright E2E (17 steps) |
+| Testing infrastructure | ✅ | Vitest (147 tests) + Playwright E2E (20 steps) |
 | Export/import (backup/restore), encrypted backup | ✅ | zod-validated, AES-GCM |
 | PWA / offline | 🟡 | Manifest + service worker caching the app shell; install prompt UX not customised |
 
@@ -38,7 +38,8 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Recurring payments | ✅ | Dismissable; editing a detected series ⬜ |
 | Spending anomalies | ✅ | Robust z-score |
 | Period comparison | ✅ | Month vs previous 3 months, or any two custom date ranges |
-| Financial flexibility with provenance | ✅ | |
+| Financial flexibility with provenance | ✅ | Shows discretionary budgets and unallocated capacity |
+| Category budgets with variance tracking | ✅ | Pace-aware status, suggestions from median spending |
 
 ## Phase 3 — ChoiceLedger
 
@@ -48,8 +49,8 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Alternatives with costs, criteria with weights and direction | ✅ | |
 | Weighted scoring with normalisation and full breakdown | ✅ | |
 | Weight sensitivity and fragility warning | ✅ | |
-| Cost–benefit (Pareto) indicator | ✅ | Scatter chart ⬜ |
-| Pairwise comparison (AHP) for weights | ⬜ | Backlog |
+| Cost–benefit (Pareto) indicator and cost-vs-preference chart | ✅ | |
+| Pairwise comparison (AHP) for weights | ✅ | Consistency ratio; judgements stored on the decision |
 | Decision journal with search/filter | ✅ | |
 | Immutable snapshots, snapshot history on reopen | ✅ | |
 | Outcome reviews with predicted vs actual | ✅ | |
@@ -62,7 +63,7 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Scenario builder with templates and editable variants | ✅ | 5 templates |
 | Compound growth, contributions, timing, fees, tax, inflation, nominal/real | ✅ | Closed-form tested |
 | One-off and recurring flows (incl. inflation-indexed) | ✅ | |
-| Goal progress (target reached month) | ✅ | Linked to Goals entity ⬜ |
+| Goal progress (target reached month) | ✅ | Goals can be the target; date check badge; goals can track an account |
 | Opportunity-cost comparison | ✅ | |
 | Sensitivity (tornado) | ✅ | |
 | Charts comparing scenarios | ✅ | With table view |
@@ -77,7 +78,8 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Snapshot stores assumptions, projections and available funds | ✅ |
 | Review dates surface on Overview | ✅ |
 | Link a decision to actual transactions (actual cost from matched spending) | ✅ |
-| Create a decision from a Scenario Lab set (and vice versa) | ⬜ |
+| Create a decision from a Scenario Lab set (and vice versa) | ✅ |
+| Review reminders (nav badge, opt-in notifications on open) | ✅ |
 
 ## Phase 6 — Advanced
 

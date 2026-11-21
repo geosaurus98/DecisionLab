@@ -103,6 +103,11 @@ try {
   ok('spending analysis: income $4,300/month (transfers excluded), recurring payments detected');
   await snap('spending');
 
+  await page.getByRole('button', { name: /Start from typical spending/ }).click();
+  await expectText('Edit budgets');
+  await expectText('of $1,340'); // rent budget = median monthly rent
+  ok('budgets set from typical spending, with pace-aware status');
+
   // Enter a balance so flexibility can be estimated
   await page.goto(`${BASE}#/settings`);
   await page.getByRole('button', { name: 'Edit' }).first().click();
@@ -136,6 +141,16 @@ try {
   await expectText('Preference score');
   await expectText('How the score is calculated');
   ok('transparent weighted-score breakdown and weight sensitivity shown');
+  await expectText('Cost versus preference');
+
+  await page.getByRole('tab', { name: '1 · Options & criteria' }).click();
+  await page.getByRole('button', { name: 'Compare in pairs…' }).click();
+  await page.locator('dialog[open] input[type=range]').first().fill('-4'); // Enjoyment strongly more important
+  await expectText('Enjoyment is strongly more important (5×)');
+  await page.getByRole('button', { name: 'Use these weights' }).click();
+  const w = await page.locator('input[id^="c-w-"]').first().inputValue();
+  if (w !== '83.3') throw new Error(`expected AHP weight 83.3 for Enjoyment, got ${w}`);
+  ok('pairwise (AHP) comparison derives weights: 5× more important ⇒ 83.3% / 16.7%');
   await snap('decision-compare');
 
   await page.getByRole('tab', { name: '3 · Financial impact' }).click();
@@ -213,6 +228,16 @@ try {
   await expectText('Based on only 1 reviewed decision');
   ok('insights show sample size and caution with little data');
   await snap('insights');
+
+  await page.goto(decisionUrl);
+  await page.getByRole('button', { name: 'Open in Scenario Lab' }).click();
+  await page.waitForURL(/#\/scenarios\?set=scn_/);
+  if ((await page.locator('#scn-name').inputValue()) !== 'Japan trip or invest (from decision)') throw new Error('scenario not created from decision');
+  await page.getByRole('button', { name: 'Create a decision from this' }).click();
+  await page.waitForURL(/#\/decisions\/dec_/);
+  const optionNames = await page.locator('input[id^="o-name-"]').evaluateAll((els) => els.map((e) => e.value));
+  if (optionNames.join() !== 'Japan trip,Invest the money') throw new Error(`unexpected options ${optionNames}`);
+  ok('decision → Scenario Lab → new decision round trip keeps the alternatives');
 
   if (problems.length) throw new Error(problems.join('\n'));
   console.log(`\nAll ${step} steps passed.`);

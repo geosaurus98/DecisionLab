@@ -54,6 +54,15 @@ Group by (merchant key, direction); same-day payments are summed. Requires ≥ 3
 
 Provenance: balances, reserve, upcoming expenses, goals, commitment and overrides are *Manual*; income/obligation/essential estimates are *Estimated*.
 
+## Budgets (`src/engine/budgets.ts`)
+
+- A budget is a manual monthly amount for an **expense** category (transfers, savings and income cannot be budgeted).
+- Actual = net spending in that category for the calendar month (refunds reduce it; split parts count in their own categories).
+- Elapsed share = day of month ÷ days in month for the current month; 1 for past months.
+- Status: **over** if actual > budget; **ahead of pace** if, in the current month, actual > budget × elapsed × 1.1; otherwise **on track**. Bills paid once a month can look ahead of pace early in the month.
+- Suggested budget = median monthly net spending over the last three complete months, rounded **up** to the next $10.
+- In the flexibility estimate, *planned in discretionary budgets* = Σ budgets of non-essential categories; *not yet allocated* = monthly capacity − that sum (a warning appears if negative). Budgets do not change the capacity estimate itself.
+
 ## Decision scoring (`src/engine/scoring.ts`)
 
 1. Weights normalised: wᵢ = rawᵢ / Σ raw (all zero → equal weights).
@@ -64,6 +73,8 @@ Provenance: balances, reserve, upcoming expenses, goals, commitment and override
 4. **Pareto efficiency**: an option is *dominated* if another has a score ≥ and total cost ≤ with at least one strict.
 
 **Weight sensitivity** — for each criterion, its weight share w is varied over [0,1] (steps of 0.005) with other weights scaled proportionally by (1 − w). Reported: the stable range where the leader stays first and the smallest shift that changes the leader.
+**Pairwise weights (AHP, `src/engine/ahp.ts`)** — optional. For each pair of criteria the user gives a Saaty judgement (1 = equal … 9 = extremely more important; reciprocal for the reverse). Weights = normalised geometric means of the rows of the reciprocal matrix. Consistency: λmax = mean((A·w)ᵢ / wᵢ), CI = (λmax − n)/(n − 1), CR = CI / RI(n) with Saaty's random indices (n = 3: 0.58, 4: 0.90, 5: 1.12, …). CR ≤ 0.10 is acceptable; above it the UI asks the user to revisit contradictory judgements. Applied weights are stored as percentages (one decimal), and the judgements are kept on the decision.
+
 **Fragile ranking** warning when the top-two margin is < 5 points or any single-weight shift ≤ 15 percentage points changes the leader. The leader under equal weights is also compared.
 
 With two options, min–max normalisation of a measured criterion always yields 0 vs 1; the UI warns about this.
@@ -82,7 +93,11 @@ Monthly time step; month 0 = `startMonth`; balances are reported at the **end** 
 - **Tax** is a simplification: a flat rate on each month's return, with losses producing a credit (approximates NZ PIE taxation at your PIR, where fund losses generate tax credits; does not model FIF rules or KiwiSaver specifics). Taxing only gains would create an artificial drag under volatile returns. Set 0% for pre-tax results.
 - Validated against the closed-form future value of an annuity in tests (start and end timing).
 
-**Decision alternatives → cash flows**: upfront cost becomes a one-off of −cost in `costMonth`; monthly cost becomes a recurring flow of −cost from `costMonth` for `monthlyCostMonths` (or to the horizon). **Total cost** = undiscounted sum within the horizon.
+**Decision alternatives → cash flows**: upfront cost becomes a one-off of −cost in `costMonth`; monthly cost becomes a recurring flow of −cost from `costMonth` for `monthlyCostMonths` (or to the horizon). Alternatives created from a Scenario Lab variant may also carry *extra flows* (any one-offs, recurring flows and a contribution change), so the projection is identical to the variant's.
+
+**Total cost** = −(sum of the alternative's cash flows within the horizon), undiscounted: money out is cost and money in (e.g. resale) reduces it. Inflation-indexed flows grow at the inflation assumption. Contribution changes are saving decisions, not costs, and are excluded.
+
+**Goals as targets**: choosing a goal sets the projection target to the goal amount. If the goal has a target date, a badge shows whether the balance reaches the target by the end of that month. Goals can track an account's manual balance as their saved amount.
 
 **Opportunity cost** = final real balance of an alternative − the best alternative's final real balance.
 

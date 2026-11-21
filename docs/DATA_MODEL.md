@@ -1,6 +1,6 @@
 # Data model
 
-Source of truth: [`src/domain/types.ts`](../src/domain/types.ts). Storage: IndexedDB database `decisionlab`, defined in [`src/data/db.ts`](../src/data/db.ts) (schema version 2).
+Source of truth: [`src/domain/types.ts`](../src/domain/types.ts). Storage: IndexedDB database `decisionlab`, defined in [`src/data/db.ts`](../src/data/db.ts) (schema version 3).
 
 ## Conventions
 
@@ -19,6 +19,9 @@ erDiagram
   CATEGORY ||--o{ TRANSACTION : classifies
   CATEGORY ||--o{ CATEGORY_RULE : "target of"
   CATEGORY ||--o{ MERCHANT_MEMORY : "remembered as"
+  CATEGORY ||--o| BUDGET : "planned by"
+  GOAL }o--o| ACCOUNT : "tracked by"
+  TRANSACTION }o--o| DECISION : "actual cost of"
   DECISION ||--|{ DECISION_OPTION : has
   DECISION ||--o{ CRITERION : has
   DECISION ||--o| DECISION_SNAPSHOT : "frozen at choice"
@@ -37,10 +40,11 @@ erDiagram
 | `merchantMemory` | `merchant` | `MerchantMemory` | Learned from manual corrections; outranks rules |
 | `imports` | `id`, `accountId`, `importedAt` | `ImportBatch` | Mapping used, counts, date range; `status: active/undone` (kept after undo for history) |
 | `importProfiles` | `id` | `ImportProfile` | Saved CSV column mappings |
-| `goals` | `id` | `Goal` | `earmarked` amounts are excluded from available funds |
+| `goals` | `id` | `Goal` | `earmarked` amounts are excluded from available funds; optional `accountId` uses that account's balance as the saved amount |
 | `decisions` | `id`, `status`, `date`, `reviewDate`, `updatedAt` | `Decision` | Embeds options, criteria, score matrix, its own `ProjectionAssumptions`, `snapshot`, `snapshotHistory`, `review` |
 | `scenarioSets` | `id`, `updatedAt` | `ScenarioSet` | Base assumptions + variants (one-off and recurring flows, contribution change) + optional `monteCarlo` config |
-| `settings` | `key` | key–value | `financialProfile`, `defaultAssumptions`, `seeded`, `dismissedRecurring` |
+| `settings` | `key` | key–value | `financialProfile`, `defaultAssumptions`, `seeded`, `dismissedRecurring`, `reviewReminders` |
+| `budgets` | `categoryId` | `Budget` | `monthlyAmount` (cents) per expense category |
 
 UI-only preferences (theme) are kept in `localStorage`, never financial data.
 
@@ -63,9 +67,10 @@ UI-only preferences (theme) are kept in `localStorage`, never financial data.
 
 ### Decision
 
-- `options[]`: `name`, `upfrontCost` (cents, positive = cost), `costMonth`, `monthlyCost` (may be negative for savings), `monthlyCostMonths`, `expectedBenefits`, `risks`.
+- `options[]`: `name`, `upfrontCost` (cents, positive = cost), `costMonth`, `monthlyCost` (may be negative for savings), `monthlyCostMonths`, `expectedBenefits`, `risks`, optional `extraFlows` (one-offs, recurring flows and contribution change, e.g. from a Scenario Lab variant).
 - `criteria[]`: `name`, `type` (`rating` 0–10 or `measure`), `direction` (higher/lower is better), `weight` (relative), `unit`.
 - `scores[optionId][criterionId]`: number or null.
+- `pairwise?`: AHP judgements keyed `"criterionA|criterionB"` (value of A relative to B, 1/9 … 9).
 - `assumptions`: the decision's own copy of projection assumptions (not a reference to global defaults).
 - `monteCarlo?`: `{enabled, annualVolatility, runs, seed}` for the optional uncertainty simulation.
 - `selectedOptionId`, `reasoning`, `predictedSatisfaction` (1–10), `confidence` (1–5), `reviewDate`.
@@ -77,11 +82,11 @@ Status lifecycle: `considering → decided → completed (optional) → reviewed
 
 ### ProjectionAssumptions
 
-`startMonth`, `horizonMonths`, `initialBalance`, `monthlyContribution`, `timing` (`start`/`end`), `annualReturn`, `annualFee`, `taxRateOnReturns`, `annualInflation`, optional `targetAmount`. See [CALCULATIONS.md](CALCULATIONS.md).
+`startMonth`, `horizonMonths`, `initialBalance`, `monthlyContribution`, `timing` (`start`/`end`), `annualReturn`, `annualFee`, `taxRateOnReturns`, `annualInflation`, optional `targetAmount` and `goalId`. See [CALCULATIONS.md](CALCULATIONS.md).
 
 ## Backups
 
-Format `decisionlab-backup` version 2 (version 1 files are migrated on restore): `{ format, version, exportedAt, data: { <table>: rows[] } }`. Encrypted backups (`decisionlab-encrypted-backup`) wrap the same JSON: `{ kdf: {PBKDF2, SHA-256, iterations, salt}, cipher: {AES-GCM, iv}, ciphertext }` (base64).
+Format `decisionlab-backup` version 3 (versions 1 and 2 are migrated on restore): `{ format, version, exportedAt, data: { <table>: rows[] } }`. Encrypted backups (`decisionlab-encrypted-backup`) wrap the same JSON: `{ kdf: {PBKDF2, SHA-256, iterations, salt}, cipher: {AES-GCM, iv}, ciphertext }` (base64).
 
 Restore: parse → `migrateBackup` (rejects unknown/newer formats) → zod validation of every row → replace all tables in a single IndexedDB transaction.
 
@@ -91,6 +96,7 @@ Restore: parse → `migrateBackup` (rejects unknown/newer formats) → zod valid
 | --- | --- | --- |
 | 1 | Initial schema | — |
 | 2 | `transactions.decisionId` index; optional `splits`, `decisionId`, `monteCarlo`, `actualCostSource` fields | None needed (new fields are optional). Backups v1 → v2 unchanged. |
+| 3 | New `budgets` table; optional `pairwise`, `extraFlows`, `goalId`, goal `accountId` | None needed. Backups v2 → v3: empty budgets table. |
 
 ## Migrations
 

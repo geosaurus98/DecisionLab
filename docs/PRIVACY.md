@@ -14,6 +14,7 @@ DecisionLab holds sensitive personal financial data, so privacy is a core design
 - No server, no account, no authentication (none is needed for a strictly local app).
 - No analytics, telemetry, error reporting, third-party scripts or web fonts. The production build ships a strict Content-Security-Policy (`connect-src 'self'`, `script-src 'self'`), so even a compromised dependency could not send data to another origin from the page.
 - Links you store in decisions are plain text; DecisionLab never fetches them.
+- Review reminders are opt-in local notifications created by the page itself (no push service). Their text only says how many decisions are due — never amounts or titles — because notifications can appear on a lock screen.
 - The app does not log transaction data to the browser console.
 - Any future external integration (bank feeds, sync) must be opt-in with explicit consent and documented here first.
 
