@@ -82,8 +82,8 @@ export function SimpleTable({ headers, rows, align }: { headers: string[]; rows:
       <thead className="sticky top-0 bg-surface">
         <tr className="border-b border-border text-left text-xs text-muted">
           {headers.map((h, i) => (
-            <th key={h} scope="col" className={`px-2 py-1.5 font-medium ${align?.[i] === 'right' ? 'text-right' : ''}`}>
-              {h}
+            <th key={h || `col-${i}`} scope="col" className={`px-2 py-1.5 font-medium ${align?.[i] === 'right' ? 'text-right' : ''}`}>
+              {h || <span className="sr-only">Actions</span>}
             </th>
           ))}
         </tr>

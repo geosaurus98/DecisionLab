@@ -116,7 +116,9 @@ const nzdWholeFormatter = new Intl.NumberFormat('en-NZ', {
 /** Format cents as NZ dollars, e.g. -123456 -> "-$1,234.56". */
 export function formatMoney(cents: Cents, opts: { whole?: boolean; signed?: boolean } = {}): string {
   const formatter = opts.whole ? nzdWholeFormatter : nzdFormatter;
-  const text = formatter.format(cents / 100);
+  // Normalise negative zero (e.g. −0 from negating a zero reserve) so it never shows as "-$0.00".
+  const value = cents / 100;
+  const text = formatter.format(value === 0 || Math.abs(value) < (opts.whole ? 0.5 : 0.005) ? 0 : value);
   if (opts.signed && cents > 0) return `+${text}`;
   return text;
 }

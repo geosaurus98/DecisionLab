@@ -12,6 +12,10 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const AXE_PATH = require.resolve('axe-core/axe.min.js');
 
 const PORT = 4321;
 const BASE = `http://localhost:${PORT}/`;
@@ -33,6 +37,12 @@ for (const m of months) {
 rows.push(['03/11/2026', '-45.00', 'MEMPHIS BELLE CAFE', '']);
 const csvPath = join(tmpdir(), 'decisionlab-e2e-statement.csv');
 writeFileSync(csvPath, rows.map((r) => r.join(',')).join('\n'));
+// A second statement in a Kiwibank-style layout with a running balance column.
+const kbPath = join(tmpdir(), 'decisionlab-e2e-kiwibank.csv');
+writeFileSync(
+  kbPath,
+  ['Account number,Date,Memo/Description,Amount,Balance', '38-9000-0000000-01,01-10-2026,TRANSFER FROM EVERYDAY,400.00,5400.00', '38-9000-0000000-01,28-10-2026,INTEREST CREDIT,18.40,5418.40', '38-9000-0000000-01,01-11-2026,TRANSFER FROM EVERYDAY,400.00,5818.40'].join('\n'),
+);
 
 const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'ignore' });
 // Wait until the preview server answers (poll rather than parse its coloured output).
@@ -108,15 +118,39 @@ try {
   await expectText('of $1,340'); // rent budget = median monthly rent
   ok('budgets set from typical spending, with pace-aware status');
 
+  await page.locator('tr', { hasText: 'Netflix Com' }).getByRole('button', { name: 'Edit' }).click();
+  await page.fill('#rec-label', 'Netflix');
+  await page.fill('#rec-amount', '20.99');
+  await page.getByRole('button', { name: 'Save and confirm' }).click();
+  await page.locator('tr', { hasText: 'Netflix' }).getByText('Confirmed').waitFor();
+  await expectText('$20.99');
+  ok('recurring payment renamed, confirmed and given its new price');
+
+  await page.goto(`${BASE}#/transactions`);
+  await page.getByRole('button', { name: 'Import CSV' }).first().click();
+  await page.setInputFiles('#csv-file', kbPath);
+  await page.selectOption('#imp-account', '__new');
+  await page.fill('#new-acc', 'Savings');
+  await page.selectOption('#new-acc-type', 'savings');
+  await page.getByRole('button', { name: 'Next' }).click();
+  await expectText('Looks like a Kiwibank export');
+  await page.getByRole('button', { name: 'Preview import' }).click();
+  await expectText('Closing balance in this statement: $5,818.40');
+  await page.getByRole('button', { name: 'Import 3 transactions' }).click();
+  await expectText('Imported 3 transactions');
+  ok('Kiwibank layout detected; statement closing balance read ($5,818.40)');
+
   // Enter a balance so flexibility can be estimated
   await page.goto(`${BASE}#/settings`);
-  await page.getByRole('button', { name: 'Edit' }).first().click();
+  await page.locator('li', { hasText: 'Everyday' }).getByRole('button', { name: 'Edit' }).click();
   await page.fill('#acc-bal', '6000');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await page.goto(`${BASE}#/`);
   await expectText('Available now');
   await expectText('$6,000.00');
-  ok('flexibility estimate uses the manually entered balance');
+  await expectText('From your imported statement, as of 2026-11-01');
+  await expectText('$11,818.40'); // $6,000 entered + $5,818.40 from the statement
+  ok('flexibility uses the entered balance (Manual) and the statement balance (Known)');
   await snap('overview');
 
   // 4. Decision
@@ -238,6 +272,30 @@ try {
   const optionNames = await page.locator('input[id^="o-name-"]').evaluateAll((els) => els.map((e) => e.value));
   if (optionNames.join() !== 'Japan trip,Invest the money') throw new Error(`unexpected options ${optionNames}`);
   ok('decision → Scenario Lab → new decision round trip keeps the alternatives');
+
+  // Accessibility audit (axe-core, WCAG 2.1 A/AA + best practice) of every page in both themes,
+  // with synthetic demo data. CSP is bypassed only in this test context to inject axe.
+  const auditCtx = await browser.newContext({ bypassCSP: true, viewport: { width: 1360, height: 900 } });
+  const audit = await auditCtx.newPage();
+  await audit.goto(BASE);
+  await audit.getByRole('button', { name: 'Load demo data' }).first().click();
+  await audit.getByText('Demonstration data loaded.').waitFor();
+  const violations = [];
+  for (const scheme of ['light', 'dark']) {
+    await audit.emulateMedia({ colorScheme: scheme });
+    for (const route of ['', 'transactions', 'spending', 'decisions', 'scenarios', 'insights', 'settings']) {
+      await audit.goto(`${BASE}#/${route}`);
+      await audit.waitForTimeout(800);
+      await audit.addScriptTag({ path: AXE_PATH });
+      const found = await audit.evaluate(async () =>
+        (await window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa', 'best-practice'] })).violations.map((v) => `${v.impact} ${v.id} (${v.nodes.length})`),
+      );
+      violations.push(...found.map((f) => `${scheme} /${route}: ${f}`));
+    }
+  }
+  await auditCtx.close();
+  if (violations.length) throw new Error(`Accessibility violations:\n${violations.join('\n')}`);
+  ok('axe accessibility audit: no violations on any page, light and dark');
 
   if (problems.length) throw new Error(problems.join('\n'));
   console.log(`\nAll ${step} steps passed.`);

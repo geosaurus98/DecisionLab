@@ -74,7 +74,7 @@ export function AppShell() {
 
       <div className="min-w-0 flex-1 pb-20 md:pb-0">
         {hasDemo && (
-          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-warn/40 bg-warn-soft px-4 py-2 text-center text-sm text-ink">
+          <aside aria-label="Demonstration data" className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-warn/40 bg-warn-soft px-4 py-2 text-center text-sm text-ink">
             <span>
               <strong>Demonstration data loaded.</strong> Accounts named “Demo” contain synthetic transactions, not real finances.
             </span>
@@ -87,7 +87,7 @@ export function AppShell() {
             >
               Remove demo data
             </button>
-          </div>
+          </aside>
         )}
         <main id="main" ref={mainRef} tabIndex={-1} className="mx-auto w-full max-w-7xl px-4 py-5 outline-none sm:px-6 lg:px-8">
           <Outlet />

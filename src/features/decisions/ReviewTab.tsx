@@ -43,7 +43,9 @@ export function ReviewTab({ decision: d, onReplace }: { decision: Decision; onRe
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted">
-                <th className="px-2 py-1.5 font-medium" />
+                <th className="px-2 py-1.5 font-medium">
+                <span className="sr-only">Measure</span>
+              </th>
                 <th className="px-2 py-1.5 text-right font-medium">Predicted (at decision)</th>
                 <th className="px-2 py-1.5 text-right font-medium">Actual</th>
                 <th className="px-2 py-1.5 text-right font-medium">Difference</th>

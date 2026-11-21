@@ -46,4 +46,7 @@ DecisionLab holds sensitive personal financial data, so privacy is a core design
 
 ## Development rules
 
+The end-to-end accessibility audit injects axe-core into the page; it bypasses the Content-Security-Policy only inside that automated test browser, never in the app.
+
+
 Use only synthetic data in tests, fixtures, screenshots and bug reports. Keep personal CSVs in `./private/` (git-ignored). Backups (`*.decisionlab-backup*.json`) are git-ignored too.

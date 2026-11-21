@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated: November 2026 — milestone 1 (foundation + vertical slice) milestone 2 (“Uncertainty and reality”) and milestone 3 (“Decide with less friction”: budgets, pairwise weighting, cost-vs-preference chart, Scenario Lab ↔ decisions, goal targets, review reminders).
+Last updated: November 2026 — milestone 1 (foundation + vertical slice) milestones 2 (“Uncertainty and reality”), 3 (“Decide with less friction”) and 4 (“Real-world data”: bank presets, statement balances and reconciliation, editable recurring payments, upcoming bills, bill-aware budget pace, component tests and accessibility audit).
 
 Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 
@@ -14,7 +14,7 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Local persistence (Dexie/IndexedDB) | ✅ | Versioned schema, persistent-storage request |
 | Shared domain models | ✅ | `src/domain/types.ts` |
 | Synthetic demonstration dataset | ✅ | Seeded, loaded through the real import pipeline, labelled, removable |
-| Testing infrastructure | ✅ | Vitest (147 tests) + Playwright E2E (20 steps) |
+| Testing infrastructure | ✅ | Vitest (170 tests incl. component tests) + Playwright E2E (23 steps) + axe audit |
 | Export/import (backup/restore), encrypted backup | ✅ | zod-validated, AES-GCM |
 | PWA / offline | 🟡 | Manifest + service worker caching the app shell; install prompt UX not customised |
 
@@ -22,7 +22,8 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 
 | Item | Status | Notes |
 | --- | --- | --- |
-| CSV import wizard with mapping, preview, NZ formats, debit/credit | ✅ | Header-row detection, saved mappings |
+| CSV import wizard with mapping, preview, NZ formats, debit/credit | ✅ | Header-row detection, saved mappings, bank presets (🟡 unverified against real exports) |
+| Statement balances, reconciliation, balance history | ✅ | Known balance from the balance column; gaps reported |
 | Multiple accounts and imports, import history, undo | ✅ | |
 | Duplicate detection | ✅ | Occurrence-aware |
 | Original values kept for audit | ✅ | Visible in transaction details |
@@ -35,11 +36,11 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Transfers / savings not double counted | ✅ | Plus likely-transfer pair suggestions |
 | Income vs expenses, monthly cash flow, savings rate | ✅ | |
 | Spending by category, trends, essential vs discretionary | ✅ | |
-| Recurring payments | ✅ | Dismissable; editing a detected series ⬜ |
+| Recurring payments | ✅ | Confirm, rename, expected amount, dismiss; upcoming bills; bills before next pay |
 | Spending anomalies | ✅ | Robust z-score |
 | Period comparison | ✅ | Month vs previous 3 months, or any two custom date ranges |
 | Financial flexibility with provenance | ✅ | Shows discretionary budgets and unallocated capacity |
-| Category budgets with variance tracking | ✅ | Pace-aware status, suggestions from median spending |
+| Category budgets with variance tracking | ✅ | Pace expects recurring bills on their due dates; suggestions from median spending |
 
 ## Phase 3 — ChoiceLedger
 
@@ -93,3 +94,5 @@ Anomalies, basic calibration and Monte Carlo are done. See [BACKLOG.md](BACKLOG.
 - Recurring detection uses merchant keys; merchants whose description changes every month may be missed.
 - Monte Carlo assumes independent monthly returns and fixed inflation (no crash clustering or fat tails).
 - Split parts are categorised manually; rules do not create splits.
+- Bank presets have not been verified against real exports (see BANK_PRESETS.md).
+- A balance column is only read from the file being imported; balances typed manually are not reconciled against transactions.

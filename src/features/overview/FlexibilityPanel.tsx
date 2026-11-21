@@ -9,11 +9,13 @@ function Lines({ lines, total, totalLabel }: { lines: FlexLine[]; total: number 
     <dl className="text-sm">
       {lines.map((l) => (
         <div key={l.label} className="flex items-center gap-2 border-b border-border/60 py-1.5">
-          <dt className="min-w-0 flex-1">
-            <span className="block truncate">{l.label}</span>
-            {l.detail && <span className="block truncate text-xs text-muted">{l.detail}</span>}
+          <dt className="flex min-w-0 flex-1 items-center gap-2">
+            <span className="min-w-0 flex-1">
+              <span className="block truncate">{l.label}</span>
+              {l.detail && <span className="block truncate text-xs text-muted">{l.detail}</span>}
+            </span>
+            <ProvenanceBadge provenance={l.provenance} />
           </dt>
-          <ProvenanceBadge provenance={l.provenance} />
           <dd className={cx('w-28 text-right tabular', l.amount < 0 && 'text-ink-2')}>{formatMoney(l.amount)}</dd>
         </div>
       ))}

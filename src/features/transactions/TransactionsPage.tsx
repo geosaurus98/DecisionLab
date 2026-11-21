@@ -317,7 +317,9 @@ function ImportHistory({ accountName }: { accountName: Map<string, string> }) {
             <th className="px-3 py-2 font-medium">Account</th>
             <th className="px-3 py-2 font-medium">Period</th>
             <th className="px-3 py-2 text-right font-medium">Added / duplicates / errors</th>
-            <th className="px-3 py-2" />
+            <th className="px-3 py-2">
+                <span className="sr-only">Actions</span>
+              </th>
           </tr>
         </thead>
         <tbody>

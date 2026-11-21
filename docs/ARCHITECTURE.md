@@ -40,7 +40,11 @@ Engines never touch React, IndexedDB or the clock (`today` is passed in), which 
 ```mermaid
 flowchart TD
   T[Transactions<br/>imported, categorised] --> CF[Cash-flow summaries]
-  T --> RC[Recurring detection]
+  ST[Statement balance column] -->|closing balance, known| FX
+  ST -->|reconciliation gaps| T
+  T --> RC[Recurring detection<br/>+ your edits]
+  RC -->|bills before next pay| FX
+  RC -->|bills on due dates| B
   CF --> FX[Flexibility estimate<br/>available now · monthly capacity]
   RC --> FX
   P[Profile, balances, goals<br/>manual inputs] --> FX
@@ -88,6 +92,8 @@ Key shared interfaces:
 
 Runtime dependencies: react, react-dom, react-router-dom, dexie, dexie-react-hooks, recharts, papaparse, zod.
 
+Development-only dependencies beyond the build tools: vitest, fake-indexeddb (data-layer tests), @testing-library/react + jsdom (component tests), playwright (end-to-end), axe-core (automated accessibility audit). None ship to the browser.
+
 ## Key design decisions
 
 1. **Integer cents for ledger money.** All persisted and summed amounts are safe integers. Projection models compute in fractional cents and round only at outputs.
@@ -117,4 +123,6 @@ Runtime dependencies: react, react-dom, react-router-dom, dexie, dexie-react-hoo
 
 - **Unit tests** (`src/**/__tests__`): money/date parsing, CSV mapping, dedupe, categorisation, cash flow, recurring detection, flexibility, scoring and weight sensitivity, projection (checked against closed-form annuity formulas), sensitivity, Monte Carlo (zero-volatility equivalence, seed reproducibility, mean convergence, percentile ordering, common random numbers), splits, decision links, anomalies, calibration.
 - **Data-layer tests** with `fake-indexeddb`: import/undo/re-import, memory-based corrections, rule reordering, snapshot immutability, backup round trip, v1 → v2 backup migration, invalid backups, encryption, demo data, manual entry dedupe, splits, decision links.
-- **End-to-end** (`scripts/e2e-vertical-slice.mjs`, Playwright): the full import → analyse → decide (incl. Monte Carlo) → manual entry and splits → link actual payments → review workflow in Chromium (17 steps).
+- **Component tests** (`src/test/components`, jsdom + Testing Library): money input, segmented control, pairwise-weights dialog, and the import wizard end to end against an in-memory database.
+- **Accessibility**: the end-to-end run injects axe-core and audits every page with demo data in light and dark themes (WCAG 2.1 A/AA + best practice); any violation fails the run.
+- **End-to-end** (`scripts/e2e-vertical-slice.mjs`, Playwright): the full import → analyse → decide (incl. Monte Carlo) → manual entry and splits → link actual payments → review workflow in Chromium (23 steps, including bank-preset detection, statement balances, recurring edits and the accessibility audit).

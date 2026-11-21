@@ -10,30 +10,33 @@ Monte Carlo simulation (Web Worker, seeded, common random numbers), linking tran
 
 Category budgets with pace tracking and suggestions, budgets in the flexibility estimate, AHP pairwise weighting with consistency ratio, cost-vs-preference chart with Pareto frontier, Scenario Lab ↔ decision conversion, goals as projection targets (with date check and account tracking), due-review badge and opt-in reminders.
 
-## Next milestone (recommended): “Real-world data”
+## Done in milestone 4 (“Real-world data”)
 
-1. **Bank-specific CSV presets** for ANZ, ASB, BNZ, Westpac and Kiwibank, verified against real (anonymised) exports — the biggest remaining source of friction.
-2. **Opening-balance reconstruction** from a statement balance column: account balance history and an automatically *known* current balance (instead of manual).
-3. **Edit recurring series**: confirm, rename, set expected amount; an upcoming-bills calendar feeding “upcoming expenses”.
-4. **Budget-aware pace for bills**: treat categories dominated by recurring payments as lump-sum (expected on their due date) rather than evenly spread.
-5. **Component tests** for the import wizard and decision editor, plus an axe accessibility audit.
+Bank CSV presets with header detection (unverified), statement balance reading with reconciliation and balance history, editable recurring payments (confirm/rename/amount/dismiss), upcoming bills, bills before next pay in the flexibility estimate, bill-aware budget pace, component tests and an automated axe audit.
+
+## Next milestone (recommended): “Verify and learn”
+
+1. **Verify bank presets** with your real exports (needs your input — see BANK_PRESETS.md).
+2. **Criterion-level preference insights**: which criteria and weights best predicted satisfaction (shown only with ≥ 10 reviews, with uncertainty).
+3. **Monte Carlo extensions**: historical bootstrap / fat-tailed returns, uncertain inflation, sequence-of-returns stress test.
+4. **Automatic encrypted backups** to a user-chosen folder (File System Access API on desktop) with reminders.
+5. **Performance**: virtualised transaction table and analytics in a worker for 50k+ transactions.
 
 ## Then
 
-6. Monte Carlo extensions: historical bootstrap of returns, fat-tailed (Student-t) returns, uncertain inflation, sequence-of-returns stress tests.
-7. Criterion-level preference insights: which criteria you weight highly vs which predicted satisfaction (needs ≥ 10 reviews).
+6. Category-level budget history (planned vs actual by month) and budget rollover.
+7. Opening-balance prompt for accounts without a balance column, to enable balance history everywhere.
 
 ## Later / optional
 
-8. Optional automatic encrypted backups to a user-chosen folder (File System Access API on desktop).
-9. Optional local passphrase lock with encryption at rest (requires key management UX; current guidance relies on device security).
-10. Optional sync between devices (end-to-end encrypted, explicit opt-in).
-11. Desktop packaging (Tauri) with SQLite storage.
-12. Akahu (NZ open banking) integration — explicit consent, documented data flows; only if manual CSV becomes a real burden.
+8. Optional local passphrase lock with encryption at rest (requires key management UX; current guidance relies on device security).
+9. Optional sync between devices (end-to-end encrypted, explicit opt-in).
+10. Desktop packaging (Tauri) with SQLite storage.
+11. Akahu (NZ open banking) integration — explicit consent, documented data flows; only if manual CSV becomes a real burden.
 
 ## Technical debt / quality
 
-- Component tests for the import wizard and decision editor (add React Testing Library + jsdom when needed).
+- More component tests (decision editor tabs, settings forms).
 - Web Worker for heavy analytics if transaction counts grow large; virtualised transaction table.
-- Accessibility audit with axe and screen-reader pass; keyboard reordering of rules.
+- Manual screen-reader pass (NVDA/TalkBack); keyboard reordering of rules; axe audit of open dialogs.
 - Rule performance: precompile and cache per import (currently fine for thousands of rows).

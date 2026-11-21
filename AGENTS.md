@@ -5,8 +5,8 @@ Read this before changing code. It applies to humans and coding agents (Codex, C
 ## Commands
 
 - `npm run typecheck`: must pass (TypeScript strict, `noUncheckedIndexedAccess`).
-- `npm test`: must pass. Add tests for any change to `src/engine` or `src/data`.
-- `npm run build && npm run e2e`: run before finishing UI work that touches the core workflow.
+- `npm test`: must pass. Add tests for any change to `src/engine` or `src/data`. Component tests live in `src/test/components` (jsdom; start the file with `// @vitest-environment jsdom`).
+- `npm run build && npm run e2e`: run before finishing UI work that touches the core workflow. It ends with an axe accessibility audit; new violations fail the run.
 
 ## Layering (enforced by convention)
 

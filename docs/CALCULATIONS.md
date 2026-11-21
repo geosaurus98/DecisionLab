@@ -24,6 +24,19 @@ Every number DecisionLab shows is defined here. Code references point to the imp
 - **Period comparison** (a month vs the three before it, or any two custom date ranges) normalises both periods to a 30.4375-day month.
 - **Likely transfers**: an outflow and an equal inflow in different accounts within 3 days, neither already a transfer — suggested, never applied automatically.
 
+## Statement balances (`src/engine/balances.ts`)
+
+- If a statement has a running-balance column, each transaction stores the printed `balanceAfter` and its row position.
+- **File order**: oldest-first or newest-first, from the first and last dates; if every row has the same date, from which direction the printed balances agree with the amounts.
+- **Closing balance** = the chronologically last printed balance (plus any later transactions without one). On import it becomes the account's *statement balance* (provenance **Known**) if it is at least as recent as the existing one; undoing that import recomputes it from the remaining transactions.
+- **Current balance** used everywhere = the more recent of the statement balance and a manually entered balance (ties favour the statement).
+- **Reconciliation**: between two consecutive printed balances, the transactions in between must sum exactly to the difference. Any mismatch is reported as a gap (date range, expected, printed, difference) — usually a missing statement period or a duplicated transaction.
+- **Balance history**: end-of-day balance(d) = anchor − Σ amounts after d up to the anchor date (+ Σ amounts after the anchor date up to d), anchored on the current balance.
+
+## Bank presets (`src/engine/csvPresets.ts`)
+
+Header signatures for ASB, ANZ, BNZ, Westpac and Kiwibank exports pre-fill the mapping. They are **unverified** (based on publicly described layouts) until checked against a real export — see [BANK_PRESETS.md](BANK_PRESETS.md). Every row is still validated, and failures are shown, not imported.
+
 ## Categorisation (`src/engine/categorise.ts`)
 
 Precedence: manual (never overwritten) → merchant memory (from “apply to same merchant” corrections) → first matching enabled rule by priority → uncategorised.
@@ -41,10 +54,13 @@ Group by (merchant key, direction); same-day payments are summed. Requires ≥ 3
 - Confidence = regularity × (0.6 + 0.4 × stability); series below 0.5 are dropped.
 - Monthly equivalent = median amount × occurrences per month (weekly 52/12, fortnightly 26/12, quarterly 1/3, annual 1/12).
 - **Active** if the last payment is within 1.5 periods + tolerance of today.
+- **Calendar stepping**: weekly/fortnightly step 7/14 days; monthly, quarterly and annual step calendar months keeping the day of month, clamped to the month length (31 Jan → 28/29 Feb → 31 Mar). Next expected = last payment + one period.
+- **Your edits** (stored per series key): *confirm*, *rename*, set an *expected amount* (replaces the detected median; monthly equivalent recomputed), or *dismiss* (excluded everywhere). Edits survive re-detection.
+- **Upcoming bills** = projected occurrences of active outgoing series after their last payment, within the window (default 30 days), excluding transfer/savings categories. Shown as **Estimated**.
 
 ## Financial flexibility (`src/engine/flexibility.ts`)
 
-**Available now** (one-off) = Σ manual balances of liquid accounts − emergency reserve target − upcoming expenses due within the horizon (default 90 days) − earmarked goal savings. Shown only if at least one balance is entered; can be negative.
+**Available now** (one-off) = Σ current balances of liquid accounts − emergency reserve target − upcoming expenses due within the horizon (default 90 days) − bills due before the next pay − earmarked goal savings. Shown only if at least one balance is entered; can be negative.
 
 **Monthly discretionary capacity** = typical income − recurring obligations − essential variable spending − savings commitment, where:
 
@@ -52,14 +68,17 @@ Group by (merchant key, direction); same-day payments are summed. Requires ≥ 3
 - recurring obligations = Σ monthly equivalents of active recurring **outflows in expense (or uncategorised) categories** — recurring transfers and savings are excluded (they are covered by the savings commitment) — or your override;
 - essential variable spending = max(0, median monthly essential spending − recurring obligations in essential categories), avoiding double counting.
 
-Provenance: balances, reserve, upcoming expenses, goals, commitment and overrides are *Manual*; income/obligation/essential estimates are *Estimated*.
+- **Bills due before your next pay** (estimated): when an active recurring income exists, projected consumption bills from today until the day before the next expected income are deducted from *available now* — money in the account that is already spoken for.
+
+Provenance: statement balances are *Known*; entered balances, reserve, upcoming expenses, goals, commitment and overrides are *Manual*; income/obligation/essential estimates and bills before pay are *Estimated*.
 
 ## Budgets (`src/engine/budgets.ts`)
 
 - A budget is a manual monthly amount for an **expense** category (transfers, savings and income cannot be budgeted).
 - Actual = net spending in that category for the calendar month (refunds reduce it; split parts count in their own categories).
 - Elapsed share = day of month ÷ days in month for the current month; 1 for past months.
-- Status: **over** if actual > budget; **ahead of pace** if, in the current month, actual > budget × elapsed × 1.1; otherwise **on track**. Bills paid once a month can look ahead of pace early in the month.
+- Expected by today (current month) = recurring bills in the category already due this month (on their dates, from the recurring calendar) + (budget − all of the month's recurring bills in the category, floored at 0) × elapsed share; capped at the budget.
+- Status: **over** if actual > budget; **ahead of pace** if, in the current month, actual > expected by today × 1.1; otherwise **on track**.
 - Suggested budget = median monthly net spending over the last three complete months, rounded **up** to the next $10.
 - In the flexibility estimate, *planned in discretionary budgets* = Σ budgets of non-essential categories; *not yet allocated* = monthly capacity − that sum (a warning appears if negative). Budgets do not change the capacity estimate itself.
 

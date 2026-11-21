@@ -217,7 +217,9 @@ function ScenarioEditor({ set, onChange }: { set: ScenarioSet; onChange: (s: Sce
                     <th className="px-2 py-1.5 text-right font-medium">Final (nominal)</th>
                     <th className="px-2 py-1.5 text-right font-medium">Final (today’s $)</th>
                     <th className="px-2 py-1.5 text-right font-medium">vs best</th>
-                    <th className="px-2 py-1.5 font-medium" />
+                    <th className="px-2 py-1.5 font-medium">
+                <span className="sr-only">Notes</span>
+              </th>
                   </tr>
                 </thead>
                 <tbody>

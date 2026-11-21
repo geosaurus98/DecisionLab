@@ -48,5 +48,7 @@ describe('roundCents / formatMoney', () => {
     expect(formatMoney(123456)).toBe('$1,234.56');
     expect(formatMoney(-4510)).toBe('-$45.10');
     expect(formatMoney(100, { signed: true })).toBe('+$1.00');
+    expect(formatMoney(-0)).toBe('$0.00');
+    expect(formatMoney(-40, { whole: true })).toBe('$0');
   });
 });
