@@ -22,7 +22,7 @@
  *
  * Returns are illustrative assumptions, not guaranteed interest.
  */
-import type { Cents } from '@/domain/money';
+import { roundCents, type Cents } from '@/domain/money';
 import { addMonths, type MonthKey } from '@/domain/dates';
 import type { OneOffFlow, ProjectionAssumptions, RecurringFlow, ScenarioVariant } from '@/domain/types';
 
@@ -208,6 +208,7 @@ export interface CostedOption {
   costMonth: number;
   monthlyCost: Cents;
   monthlyCostMonths?: number;
+  extraFlows?: { oneOffs: OneOffFlow[]; recurring: RecurringFlow[]; contributionDelta: Cents };
 }
 
 /** Convert a decision option's costs into scenario cash flows (costs reduce the modelled balance). */
@@ -227,16 +228,77 @@ export function optionToVariant(option: CostedOption): ScenarioVariant {
         },
       ]
     : [];
-  return { id: option.id, name: option.name, oneOffs, recurring, contributionDelta: 0 };
+  const extra = option.extraFlows;
+  return {
+    id: option.id,
+    name: option.name,
+    oneOffs: extra ? [...oneOffs, ...extra.oneOffs] : oneOffs,
+    recurring: extra ? [...recurring, ...extra.recurring] : recurring,
+    contributionDelta: extra?.contributionDelta ?? 0,
+  };
 }
 
-/** Total nominal (undiscounted) cost of an option within the horizon. */
-export function totalOptionCost(option: CostedOption, horizonMonths: number): Cents {
-  const start = Math.max(0, option.costMonth);
-  const upfront = start < horizonMonths ? option.upfrontCost : 0;
-  const months = option.monthlyCostMonths ?? Infinity;
-  const activeMonths = Math.max(0, Math.min(months, horizonMonths - start));
-  return upfront + option.monthlyCost * activeMonths;
+/**
+ * Convert a Scenario Lab variant into a decision option. A variant with a single negative
+ * one-off and/or a single negative, non-indexed recurring flow starting in the same month
+ * maps onto the simple upfront/monthly fields; anything richer is kept as extra flows, so
+ * the projection is identical either way.
+ */
+export function variantToOption(v: ScenarioVariant): CostedOption & { expectedBenefits?: string } {
+  const base = { id: v.id, name: v.name, upfrontCost: 0, costMonth: 0, monthlyCost: 0 };
+  const one = v.oneOffs[0];
+  const rec = v.recurring[0];
+  const simple =
+    v.contributionDelta === 0 &&
+    v.oneOffs.length <= 1 &&
+    v.recurring.length <= 1 &&
+    (!one || one.amount < 0) &&
+    (!rec || (rec.monthlyAmount < 0 && !rec.inflationIndexed && (!one || rec.startMonth === one.month)));
+  if (simple) {
+    const costMonth = one?.month ?? rec?.startMonth ?? 0;
+    return {
+      ...base,
+      costMonth,
+      upfrontCost: one ? -one.amount : 0,
+      monthlyCost: rec ? -rec.monthlyAmount : 0,
+      monthlyCostMonths: rec && rec.endMonth !== undefined ? rec.endMonth - rec.startMonth + 1 : undefined,
+    };
+  }
+  return { ...base, extraFlows: { oneOffs: v.oneOffs, recurring: v.recurring, contributionDelta: v.contributionDelta } };
+}
+
+/**
+ * Total nominal (undiscounted) cost of an option within the horizon: the sum of its cash
+ * flows with the sign flipped (money out is cost; money in, e.g. resale, reduces it).
+ * Contribution changes are saving decisions, not costs, and are excluded.
+ * Inflation-indexed recurring flows grow at `annualInflation`.
+ */
+export function totalOptionCost(option: CostedOption, horizonMonths: number, annualInflation = 0): Cents {
+  const v = optionToVariant(option);
+  const inflM = monthlyRate(annualInflation);
+  let total = 0;
+  for (let t = 0; t < horizonMonths; t++) total += flowsForMonth(t, v, inflM);
+  return roundCents(-total);
+}
+
+/** Month offset (from startMonth) of a calendar date, or null if before the start. */
+export function monthOffset(startMonth: string, date: string): number | null {
+  const [sy, sm] = startMonth.split('-').map(Number) as [number, number];
+  const [y, m] = date.split('-').map(Number) as [number, number];
+  const offset = (y - sy) * 12 + (m - sm);
+  return offset < 0 ? null : offset;
+}
+
+/**
+ * Whether the projection reaches its target by a date (end of that date's month).
+ * Returns null when there is no target or the date is outside the horizon.
+ */
+export function reachedByDate(result: ProjectionResult, a: ProjectionAssumptions, date: string): boolean | null {
+  if (a.targetAmount === undefined) return null;
+  const offset = monthOffset(a.startMonth, date);
+  if (offset === null) return false;
+  if (offset >= a.horizonMonths) return result.targetReachedAt !== null ? true : null;
+  return result.targetReachedAt !== null && result.targetReachedAt <= offset;
 }
 
 export interface VariantComparison {

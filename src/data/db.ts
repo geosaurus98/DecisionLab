@@ -12,6 +12,7 @@ import Dexie, { type Table } from 'dexie';
 import type {
   Account,
   AppSettingRecord,
+  Budget,
   Category,
   CategoryRule,
   Decision,
@@ -24,7 +25,7 @@ import type {
 } from '@/domain/types';
 
 export const DB_NAME = 'decisionlab';
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export class DecisionLabDb extends Dexie {
   accounts!: Table<Account, string>;
@@ -38,6 +39,7 @@ export class DecisionLabDb extends Dexie {
   decisions!: Table<Decision, string>;
   scenarioSets!: Table<ScenarioSet, string>;
   settings!: Table<AppSettingRecord, string>;
+  budgets!: Table<Budget, string>;
 
   constructor(name = DB_NAME) {
     super(name);
@@ -59,6 +61,8 @@ export class DecisionLabDb extends Dexie {
     this.version(2).stores({
       transactions: 'id, accountId, importId, date, categoryId, merchant, fingerprint, decisionId',
     });
+    // v3: monthly budgets per expense category.
+    this.version(3).stores({ budgets: 'categoryId' });
   }
 }
 
@@ -74,6 +78,7 @@ export const TABLE_NAMES = [
   'decisions',
   'scenarioSets',
   'settings',
+  'budgets',
 ] as const;
 export type TableName = (typeof TABLE_NAMES)[number];
 

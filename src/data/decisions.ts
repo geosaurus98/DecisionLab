@@ -1,10 +1,10 @@
 /** Decision persistence, including immutable snapshots taken when a choice is recorded. */
 import { db } from './db';
-import type { Decision, DecisionSnapshot, OutcomeReview } from '@/domain/types';
+import type { Decision, DecisionSnapshot, OutcomeReview, ScenarioSet } from '@/domain/types';
 import { newId, nowTimestamp } from '@/domain/ids';
 import { todayIso } from '@/domain/dates';
 import { scoreOptions } from '@/engine/scoring';
-import { compareVariants, optionToVariant, totalOptionCost } from '@/engine/projection';
+import { compareVariants, optionToVariant, totalOptionCost, variantToOption } from '@/engine/projection';
 import { simulate } from '@/engine/montecarlo';
 
 export function blankDecision(assumptions: Decision['assumptions']): Decision {
@@ -87,7 +87,7 @@ export function buildSnapshot(d: Decision, selectedOptionId: string, availableNo
     })),
     availableNow: availableNow ?? undefined,
     predictedSatisfaction: d.predictedSatisfaction,
-    predictedCost: totalOptionCost(selected, d.assumptions.horizonMonths),
+    predictedCost: totalOptionCost(selected, d.assumptions.horizonMonths, d.assumptions.annualInflation),
     confidence: d.confidence,
     monteCarlo: monteCarloSummary(d),
   });
@@ -158,5 +158,38 @@ export function duplicateDecision(d: Decision): Decision {
     createdAt: now,
     updatedAt: now,
     isDemo: false,
+  };
+}
+
+/**
+ * Start a decision from a Scenario Lab set: each variant becomes an alternative with the
+ * same cash flows, and the set's assumptions and Monte Carlo settings are copied (not linked).
+ */
+export function decisionFromScenario(set: ScenarioSet): Decision {
+  const d = blankDecision(structuredClone(set.base));
+  const options = set.variants.map((v) => ({ ...variantToOption(structuredClone(v)), id: newId('opt') }));
+  return {
+    ...d,
+    title: set.name,
+    description: set.description ?? '',
+    category: 'financial',
+    options,
+    scores: Object.fromEntries(options.map((o) => [o.id, {}])),
+    monteCarlo: set.monteCarlo ? { ...set.monteCarlo } : undefined,
+  };
+}
+
+/** Open a decision's alternatives in the Scenario Lab as a new, independent scenario set. */
+export function scenarioFromDecision(d: Decision): ScenarioSet {
+  const now = nowTimestamp();
+  return {
+    id: newId('scn'),
+    name: d.title ? `${d.title} (from decision)` : 'Scenario from decision',
+    description: d.description,
+    base: structuredClone(d.assumptions),
+    variants: d.options.map((o) => ({ ...optionToVariant(structuredClone(o)), id: newId('var') })),
+    monteCarlo: d.monteCarlo ? { ...d.monteCarlo } : undefined,
+    createdAt: now,
+    updatedAt: now,
   };
 }

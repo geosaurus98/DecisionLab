@@ -180,7 +180,16 @@ export interface Goal {
   currentAmount: Cents;
   /** If true, the current amount is excluded from funds available for other decisions. */
   earmarked: boolean;
+  /** Optional account whose (manual) balance is the amount saved so far, instead of currentAmount. */
+  accountId?: Id;
   createdAt: Timestamp;
+}
+
+/** Planned monthly spending for an expense category (manual). */
+export interface Budget {
+  categoryId: Id;
+  monthlyAmount: Cents;
+  updatedAt: Timestamp;
 }
 
 /** User-entered planning inputs for the flexibility estimate. Values are manual by definition. */
@@ -242,6 +251,8 @@ export interface ProjectionAssumptions {
   annualInflation: number;
   /** Optional goal for progress tracking. */
   targetAmount?: Cents;
+  /** Goal the target was taken from (its target date is used to check “reached in time”). */
+  goalId?: Id;
 }
 
 /** Changes applied on top of base assumptions to form one alternative. */
@@ -317,6 +328,11 @@ export interface DecisionOption {
   monthlyCostMonths?: number;
   expectedBenefits?: string;
   risks?: string;
+  /**
+   * Additional cash flows beyond the simple upfront/monthly costs, e.g. when the option was
+   * created from a Scenario Lab variant. Same sign convention as scenarios (negative = money out).
+   */
+  extraFlows?: { oneOffs: OneOffFlow[]; recurring: RecurringFlow[]; contributionDelta: Cents };
 }
 
 export interface OutcomeReview {
@@ -371,6 +387,11 @@ export interface Decision {
   options: DecisionOption[];
   criteria: Criterion[];
   scores: ScoreMatrix;
+  /**
+   * Optional pairwise importance judgements used to derive weights (AHP), keyed
+   * "criterionA|criterionB" with the Saaty value of A relative to B (1/9 … 9).
+   */
+  pairwise?: Record<string, number>;
   /** Assumptions used to project the financial consequences of each option. */
   assumptions: ProjectionAssumptions;
   monteCarlo?: MonteCarloConfig;

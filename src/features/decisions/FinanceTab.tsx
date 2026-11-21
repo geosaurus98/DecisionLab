@@ -121,7 +121,7 @@ export function FinanceTab({ decision: d, onChange, flex }: { decision: Decision
                     return (
                       <tr key={c.variantId} className="border-b border-border/60">
                         <td className="px-2 py-1.5">{c.name}</td>
-                        <td className="px-2 py-1.5 text-right tabular">{formatMoney(totalOptionCost(o, d.assumptions.horizonMonths))}</td>
+                        <td className="px-2 py-1.5 text-right tabular">{formatMoney(totalOptionCost(o, d.assumptions.horizonMonths, d.assumptions.annualInflation))}</td>
                         <td className="px-2 py-1.5 text-right tabular">{formatMoney(c.result.finalNominal)}</td>
                         <td className="px-2 py-1.5 text-right tabular">{formatMoney(c.result.finalReal)}</td>
                         <td className="px-2 py-1.5 text-right font-medium tabular">{c.vsBestReal === 0 ? '—' : formatMoney(c.vsBestReal)}</td>

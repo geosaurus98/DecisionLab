@@ -278,16 +278,65 @@ describe('milestone 2: manual entry, splits, links, schema v2', () => {
     expect(await db.transactions.count()).toBe(6);
   });
 
-  it('restores a version 1 backup into the version 2 schema', async () => {
+  it('restores a version 1 backup (no budgets table) into the current schema', async () => {
     const accountId = await setupAccount();
     await commitImport({ accountId, fileName: 'a.csv', mapping: MAPPING, preview: await previewImport(accountId, parseCsvText(CSV).rows, MAPPING) });
     const v1 = JSON.parse(JSON.stringify(await exportBackup()));
     v1.version = 1;
+    delete v1.data.budgets;
     await deleteAllData();
     const report = await restoreBackup(v1);
     expect(report.ok).toBe(true);
-    expect(migrateBackup(v1).version).toBe(2);
+    expect(migrateBackup(v1).version).toBe(3);
     expect(await db.transactions.count()).toBe(6);
-    expect(db.verno).toBe(2);
+    expect(await db.budgets.count()).toBe(0);
+    expect(db.verno).toBe(3);
+  });
+});
+
+describe('milestone 3: budgets and scenario/decision conversion', () => {
+  it('saves, clears and suggests budgets and includes them in backups', async () => {
+    const { saveBudget, applySuggestedBudgets } = await import('../budgets');
+    await saveBudget('cat-eating-out', 20000);
+    await saveBudget('cat-groceries', 0);
+    expect(await db.budgets.count()).toBe(1);
+    await saveBudget('cat-eating-out', null);
+    expect(await db.budgets.count()).toBe(0);
+    await expect(saveBudget('cat-transfers', 1000)).rejects.toThrow(/expense/);
+    const n = await applySuggestedBudgets(new Map([['cat-eating-out', 25000], ['cat-groceries', 40000]]), { overwrite: false });
+    expect(n).toBe(2);
+    await saveBudget('cat-groceries', 1);
+    expect(await applySuggestedBudgets(new Map([['cat-groceries', 40000]]), { overwrite: false })).toBe(0);
+    expect((await exportBackup()).data.budgets).toHaveLength(2);
+  });
+
+  it('creates a decision from a scenario set and a scenario set from a decision', async () => {
+    const { decisionFromScenario, scenarioFromDecision } = await import('../decisions');
+    const { compareVariants, optionToVariant } = await import('@/engine/projection');
+    const base = defaultAssumptions('2026-11-20');
+    const set = {
+      id: 'scn',
+      name: 'Trip vs invest',
+      base: { ...base, initialBalance: 500_000 },
+      variants: [
+        { id: 'v1', name: 'Trip', oneOffs: [{ id: 'o', label: 'Trip', month: 0, amount: -300_000 }], recurring: [], contributionDelta: 0 },
+        { id: 'v2', name: 'Invest', oneOffs: [], recurring: [], contributionDelta: 5_000 },
+      ],
+      monteCarlo: { enabled: true, annualVolatility: 0.1, runs: 1000, seed: 1 },
+      createdAt: '',
+      updatedAt: '',
+    };
+    const d = decisionFromScenario(set);
+    expect(d.title).toBe('Trip vs invest');
+    expect(d.options.map((o) => o.name)).toEqual(['Trip', 'Invest']);
+    expect(d.options[0]!.upfrontCost).toBe(300_000);
+    expect(d.monteCarlo?.enabled).toBe(true);
+    const fromSet = compareVariants(set.base, set.variants).map((c) => c.result.finalNominal);
+    const fromDecision = compareVariants(d.assumptions, d.options.map(optionToVariant)).map((c) => c.result.finalNominal);
+    expect(fromDecision).toEqual(fromSet);
+    const back = scenarioFromDecision(d);
+    expect(back.variants).toHaveLength(2);
+    expect(compareVariants(back.base, back.variants).map((c) => c.result.finalNominal)).toEqual(fromSet);
+    expect(back.id).not.toBe(set.id);
   });
 });

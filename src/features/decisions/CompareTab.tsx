@@ -10,7 +10,7 @@ import { DEFINITIONS } from '@/ui/definitions';
 export function CompareTab({ decision: d }: { decision: Decision; onChange: (d: Decision) => void }) {
   const scoring = useMemo(() => scoreOptions(d.options, d.criteria, d.scores), [d.options, d.criteria, d.scores]);
   const sens = useMemo(() => weightSensitivity(d.options, d.criteria, d.scores), [d.options, d.criteria, d.scores]);
-  const costs = useMemo(() => new Map(d.options.map((o) => [o.id, totalOptionCost(o, d.assumptions.horizonMonths)])), [d.options, d.assumptions.horizonMonths]);
+  const costs = useMemo(() => new Map(d.options.map((o) => [o.id, totalOptionCost(o, d.assumptions.horizonMonths, d.assumptions.annualInflation)])), [d.options, d.assumptions.horizonMonths]);
   const pareto = useMemo(
     () => paretoEfficient(scoring.results.map((r) => ({ optionId: r.optionId, score: r.score, cost: costs.get(r.optionId) ?? 0 }))),
     [scoring, costs],

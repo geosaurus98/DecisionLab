@@ -102,3 +102,23 @@ describe('estimateFlexibility', () => {
     expect(res.availableNow).toBeLessThan(0);
   });
 });
+
+describe('budgets and goal accounts in the flexibility estimate', () => {
+  it('compares discretionary budgets with monthly capacity', () => {
+    const base = estimateFlexibility(input);
+    const res = estimateFlexibility({ ...input, budgets: [{ categoryId: 'eating', monthlyAmount: 20000, updatedAt: '' }, { categoryId: 'groceries', monthlyAmount: 99999, updatedAt: '' }] });
+    expect(res.budgetedDiscretionary).toBe(20000); // groceries is essential, so excluded
+    expect(res.unallocatedCapacity).toBe(base.monthlyCapacity! - 20000);
+    const over = estimateFlexibility({ ...input, budgets: [{ categoryId: 'eating', monthlyAmount: 9_999_999, updatedAt: '' }] });
+    expect(over.warnings.join(' ')).toMatch(/exceed estimated monthly capacity/);
+    expect(base.budgetedDiscretionary).toBeNull();
+  });
+  it('uses a linked account balance as goal savings, earmarking it only if that account is liquid', () => {
+    const saver = { id: 's', name: 'Goal saver', type: 'savings' as const, currency: 'NZD' as const, includeInLiquid: true, balance: { amount: 250000, asOf: '2026-11-15' }, createdAt: '' };
+    const goal = { ...input.goals[0]!, accountId: 's', currentAmount: 1 };
+    const res = estimateFlexibility({ ...input, accounts: [...input.accounts, saver], goals: [goal] });
+    expect(res.availableNow).toBe(800000 + 250000 - 300000 - 10000 - 250000);
+    const notLiquid = estimateFlexibility({ ...input, accounts: [...input.accounts, { ...saver, includeInLiquid: false }], goals: [goal] });
+    expect(notLiquid.availableNow).toBe(800000 - 300000 - 10000);
+  });
+});

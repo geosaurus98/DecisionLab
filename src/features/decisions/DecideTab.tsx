@@ -92,7 +92,7 @@ export function DecideTab({ decision: d, onChange, onReplace, errors, flex }: {
                 <span className="font-semibold">{o.name}</span>
                 {r && d.criteria.length > 0 && <Badge>Preference {r.score.toFixed(0)}/100 · #{r.rank}</Badge>}
                 <span className="ml-auto text-ink-2 tabular">
-                  Cost {formatMoney(totalOptionCost(o, d.assumptions.horizonMonths), { whole: true })}
+                  Cost {formatMoney(totalOptionCost(o, d.assumptions.horizonMonths, d.assumptions.annualInflation), { whole: true })}
                   {c && c.vsBestReal !== 0 && ` · ${formatMoney(c.vsBestReal, { whole: true })} vs best at horizon (today’s $)`}
                 </span>
               </label>
