@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Badge, Button, Checkbox, Field, Input, Modal, Notice, Select, cx } from '@/ui/components';
 import { parseCsvText, suggestMapping, validateMapping, MAX_CSV_BYTES, type ParsedCsv } from '@/engine/csv';
+import { detectPreset, type BankPreset } from '@/engine/csvPresets';
 import { commitImport, previewImport, type ImportPreview } from '@/data/imports';
 import { saveAccount } from '@/data/transactions';
 import { db } from '@/data/db';
@@ -34,6 +35,7 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
   const [busy, setBusy] = useState(false);
   const [saveProfileName, setSaveProfileName] = useState('');
   const [filter, setFilter] = useState<'all' | 'new' | 'duplicate' | 'error'>('all');
+  const [preset, setPreset] = useState<BankPreset | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -44,6 +46,7 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
       setFileError(null);
       setMapping({});
       setSaveProfileName('');
+      setPreset(null);
     }
   }, [open]);
 
@@ -64,7 +67,9 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
       if (p.headers.length < 2 || p.rows.length === 0) return setFileError('No rows found. Is this a CSV with a header row?');
       setParsed(p);
       setFileName(file.name);
-      setMapping(suggestMapping(p));
+      const detected = detectPreset(p.headers);
+      setPreset(detected);
+      setMapping(detected ? detected.mapping : suggestMapping(p));
     } catch (e) {
       setFileError(e instanceof Error ? e.message : 'Could not read the file.');
     }
@@ -200,6 +205,13 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
 
       {step === 'mapping' && parsed && (
         <div className="grid gap-4">
+          {preset && (
+            <Notice tone={preset.verified ? 'good' : 'warn'} title={`Looks like a ${preset.bank} export`}>
+              The columns below were filled in from DecisionLab’s {preset.bank} layout
+              {preset.verified ? `, verified on ${preset.verified.on}.` : ', which has not yet been verified against a real export — check the date format and that spending shows as negative in the preview.'}
+              {preset.notes && <span className="block">{preset.notes}</span>}
+            </Notice>
+          )}
           {profiles && profiles.length > 0 && (
             <Field label="Use a saved mapping" htmlFor="profile">
               <Select
@@ -274,6 +286,12 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
                 </Field>
               </>
             )}
+            <Field label="Balance column (optional)" htmlFor="m-bal" hint="Lets DecisionLab read your balance and check for missing transactions">
+              <Select id="m-bal" value={mapping.balanceColumn ?? ''} onChange={(e) => set({ balanceColumn: e.target.value || undefined })}>
+                <option value="">None</option>
+                {headerOptions}
+              </Select>
+            </Field>
             <Field label="Reference column (optional)" htmlFor="m-ref">
               <Select id="m-ref" value={mapping.referenceColumn ?? ''} onChange={(e) => set({ referenceColumn: e.target.value || undefined })}>
                 <option value="">None</option>
@@ -348,6 +366,22 @@ export function ImportWizard({ open, onClose }: { open: boolean; onClose: () => 
             ) : null}
             Duplicates of transactions already in this account are skipped. Rows with errors are not imported.
           </p>
+          {preview.closingBalance && (
+            <p className="text-sm">
+              Closing balance in this statement: <strong className="tabular">{formatMoney(preview.closingBalance.amount)}</strong> on {formatDate(preview.closingBalance.asOf)}{' '}
+              <Badge tone="good">Known</Badge> — it becomes the account’s current balance if it is the most recent.
+            </p>
+          )}
+          {preview.balanceGaps.length > 0 && (
+            <Notice tone="warn" title="The statement’s running balance doesn’t add up in places">
+              {preview.balanceGaps.slice(0, 3).map((g) => (
+                <span key={`${g.from}-${g.to}`} className="block">
+                  Between {formatDate(g.from)} and {formatDate(g.to)}: expected {formatMoney(g.expected)}, statement shows {formatMoney(g.printed)} ({formatMoney(g.difference, { signed: true })}).
+                </span>
+              ))}
+              Rows may be missing from the file, or the file may mix several accounts.
+            </Notice>
+          )}
           <div className="max-h-[45vh] overflow-auto rounded-lg border border-border">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-surface-2 text-xs text-muted">

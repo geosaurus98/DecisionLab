@@ -25,5 +25,5 @@ export const DEFINITIONS = {
   mcDifference:
     'For each simulated path, both alternatives experience the same market returns, so the difference isolates the effect of the decision itself. Percentiles are taken across paths.',
   budget:
-    'Your planned monthly spending per category (entered by you). Actual spending is net of refunds and counts split parts in their own categories. In the current month, “ahead of pace” means spending is more than 10% above an even spread across the month. Categories paid as one bill (rent, power) can look ahead of pace early in the month.',
+    'Your planned monthly spending per category (entered by you). Actual spending is net of refunds and counts split parts in their own categories. In the current month, the plan expects recurring bills on their due dates and the rest of the budget spread evenly; “ahead of pace” means spending is more than 10% above that.',
 } as const;

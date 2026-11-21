@@ -15,7 +15,7 @@ import type { Cents } from '@/domain/money';
 import { addDays, type IsoDate } from '@/domain/dates';
 import type { Account, Budget, Category, FinancialProfile, Goal, Provenance } from '@/domain/types';
 import type { MonthlySummary } from './cashflow';
-import type { RecurringSeries } from './recurring';
+import { billsBeforeNextIncome, type RecurringSeries } from './recurring';
 import { median } from './stats';
 
 export interface FlexLine {
@@ -60,18 +60,19 @@ export function estimateFlexibility(input: FlexibilityInput): FlexibilityEstimat
 
   // ── One-off capacity ──
   const availableNowLines: FlexLine[] = [];
-  const liquid = accounts.filter((a) => a.includeInLiquid && a.balance);
-  const missingBalances = accounts.filter((a) => a.includeInLiquid && !a.balance);
+  const liquid = accounts.filter((a) => a.includeInLiquid && currentBalance(a));
+  const missingBalances = accounts.filter((a) => a.includeInLiquid && !currentBalance(a));
   let availableNow: Cents | null = null;
   if (liquid.length > 0) {
     let total = 0;
     for (const a of liquid) {
-      total += a.balance!.amount;
+      const bal = currentBalance(a)!;
+      total += bal.amount;
       availableNowLines.push({
         label: `Balance: ${a.name}`,
-        amount: a.balance!.amount,
-        provenance: 'manual',
-        detail: `Entered by you, as of ${a.balance!.asOf}`,
+        amount: bal.amount,
+        provenance: bal.source === 'statement' ? 'known' : 'manual',
+        detail: bal.source === 'statement' ? `From your imported statement, as of ${bal.asOf}` : `Entered by you, as of ${bal.asOf}`,
       });
     }
     availableNowLines.push({
@@ -86,6 +87,22 @@ export function estimateFlexibility(input: FlexibilityInput): FlexibilityEstimat
       availableNowLines.push({ label: `Upcoming: ${e.label}`, amount: -e.amount, provenance: 'manual', detail: `Due ${e.dueDate}` });
       total -= e.amount;
     }
+    // Bills due before the next pay are already spoken for. Only consumption counts here;
+    // transfers and savings are handled by the savings commitment.
+    const consumption = recurring.filter((r) => {
+      const kind = r.categoryId ? categories.get(r.categoryId)?.kind : undefined;
+      return r.direction === 'in' ? kind === undefined || kind === 'income' : kind === undefined || kind === 'expense';
+    });
+    const beforePay = billsBeforeNextIncome(consumption, today);
+    if (beforePay && beforePay.total > 0) {
+      availableNowLines.push({
+        label: 'Bills due before your next pay',
+        amount: -beforePay.total,
+        provenance: 'estimated',
+        detail: `${beforePay.bills.length} recurring payment${beforePay.bills.length === 1 ? '' : 's'} before ${beforePay.nextIncome}`,
+      });
+      total -= beforePay.total;
+    }
     for (const g of goals.filter((g) => g.earmarked)) {
       // A goal tracked by its own account only needs earmarking when that account's balance
       // is counted as liquid (otherwise it was never included in the total).
@@ -99,7 +116,7 @@ export function estimateFlexibility(input: FlexibilityInput): FlexibilityEstimat
     if (missingBalances.length > 0) {
       warnings.push(`No balance entered for ${missingBalances.map((a) => a.name).join(', ')}; excluded from available funds.`);
     }
-    const stale = liquid.filter((a) => a.balance!.asOf < addDays(today, -31));
+    const stale = liquid.filter((a) => currentBalance(a)!.asOf < addDays(today, -31));
     if (stale.length > 0) warnings.push(`Balance for ${stale.map((a) => a.name).join(', ')} is more than a month old.`);
   } else {
     warnings.push('Enter at least one account balance (Settings → Accounts) to estimate money available now.');
@@ -183,11 +200,24 @@ export function estimateFlexibility(input: FlexibilityInput): FlexibilityEstimat
   return { availableNow, availableNowLines, monthlyCapacity, monthlyLines, warnings, monthsUsed: months.length, budgetedDiscretionary, unallocatedCapacity };
 }
 
+/**
+ * An account's most recent balance: the statement balance (known) or the manually entered
+ * one, whichever is more recent. Ties favour the statement.
+ */
+export function currentBalance(a: Account): { amount: Cents; asOf: IsoDate; source: 'statement' | 'manual' } | null {
+  const s = a.statementBalance;
+  const m = a.balance;
+  if (s && (!m || s.asOf >= m.asOf)) return { amount: s.amount, asOf: s.asOf, source: 'statement' };
+  if (m) return { amount: m.amount, asOf: m.asOf, source: 'manual' };
+  return null;
+}
+
 /** Amount saved towards a goal: its account's balance if linked, otherwise the manual amount. */
 export function goalSaved(goal: Goal, accounts: Account[]): Cents {
   if (goal.accountId) {
     const acc = accounts.find((a) => a.id === goal.accountId);
-    if (acc?.balance) return acc.balance.amount;
+    const bal = acc ? currentBalance(acc) : null;
+    if (bal) return bal.amount;
   }
   return goal.currentAmount;
 }

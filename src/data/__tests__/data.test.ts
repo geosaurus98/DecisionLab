@@ -287,10 +287,10 @@ describe('milestone 2: manual entry, splits, links, schema v2', () => {
     await deleteAllData();
     const report = await restoreBackup(v1);
     expect(report.ok).toBe(true);
-    expect(migrateBackup(v1).version).toBe(3);
+    expect(migrateBackup(v1).version).toBe(4);
     expect(await db.transactions.count()).toBe(6);
     expect(await db.budgets.count()).toBe(0);
-    expect(db.verno).toBe(3);
+    expect(db.verno).toBe(4);
   });
 });
 
@@ -349,5 +349,94 @@ describe('review reminders', () => {
     expect(await countDueReviews('2026-11-20')).toBe(2);
     // No Notification API in Node: must be a silent no-op.
     await expect(maybeNotifyDueReviews('2026-11-20')).resolves.toBeUndefined();
+  });
+});
+
+describe('milestone 4: statement balances, overrides, schema v4', () => {
+  const BAL_CSV = `Date,Amount,Payee,Balance
+05/03/2026,-20.00,SHOP,980.00
+04/03/2026,1000.00,PAY,1000.00
+03/03/2026,-50.00,FUEL,0.00
+`;
+  const BAL_MAP: CsvMapping = { ...MAPPING, balanceColumn: 'Balance' };
+
+  it('stores printed balances, sets the account statement balance and recomputes it on undo', async () => {
+    const accountId = await setupAccount();
+    const p1 = await previewImport(accountId, parseCsvText(BAL_CSV).rows, BAL_MAP);
+    expect(p1.closingBalance).toEqual({ amount: 98000, asOf: '2026-03-05', rowId: '1' });
+    expect(p1.balanceGaps).toEqual([]);
+    const first = await commitImport({ accountId, fileName: 'mar.csv', mapping: BAL_MAP, preview: p1 });
+    expect((await db.accounts.get(accountId))!.statementBalance).toEqual({ amount: 98000, asOf: '2026-03-05', importId: first.id });
+    const t = (await db.transactions.toArray()).find((x) => x.description === 'PAY')!;
+    expect(t).toMatchObject({ balanceAfter: 100000, rowIndex: 1 });
+
+    const LATER = `Date,Amount,Payee,Balance\n07/03/2026,-30.00,CAFE,950.00\n`;
+    const second = await commitImport({ accountId, fileName: 'later.csv', mapping: BAL_MAP, preview: await previewImport(accountId, parseCsvText(LATER).rows, BAL_MAP) });
+    expect((await db.accounts.get(accountId))!.statementBalance).toMatchObject({ amount: 95000, asOf: '2026-03-07', importId: second.id });
+
+    // An older statement imported afterwards does not replace the newer balance.
+    const OLDER = `Date,Amount,Payee,Balance\n01/03/2026,10.00,INTEREST,50.00\n`;
+    await commitImport({ accountId, fileName: 'old.csv', mapping: BAL_MAP, preview: await previewImport(accountId, parseCsvText(OLDER).rows, BAL_MAP) });
+    expect((await db.accounts.get(accountId))!.statementBalance!.amount).toBe(95000);
+
+    await undoImport(second.id);
+    expect((await db.accounts.get(accountId))!.statementBalance).toEqual({ amount: 98000, asOf: '2026-03-05', importId: first.id });
+  });
+
+  it('flags a statement whose running balance does not reconcile', async () => {
+    const accountId = await setupAccount();
+    const broken = BAL_CSV.replace('04/03/2026,1000.00,PAY,1000.00\n', '');
+    const p = await previewImport(accountId, parseCsvText(broken).rows, BAL_MAP);
+    expect(p.balanceGaps).toHaveLength(1);
+    expect(p.balanceGaps[0]!.difference).toBe(100000);
+  });
+
+  it('persists recurring overrides', async () => {
+    const { setRecurringOverride, restoreDismissedRecurring } = await import('../recurring');
+    await setRecurringOverride('out:SPARK', { label: 'Internet', expectedAmount: 9000 });
+    expect(await db.recurringOverrides.get('out:SPARK')).toMatchObject({ status: 'confirmed', label: 'Internet', expectedAmount: 9000 });
+    await setRecurringOverride('out:GYM', { status: 'dismissed' });
+    await expect(setRecurringOverride('out:X', { expectedAmount: -5 })).rejects.toThrow();
+    expect(await restoreDismissedRecurring()).toBe(1);
+    await setRecurringOverride('out:SPARK', null);
+    expect(await db.recurringOverrides.count()).toBe(0);
+  });
+
+  it('migrates the old dismissed-recurring setting when upgrading a v3 database', async () => {
+    const Dexie = (await import('dexie')).default;
+    const name = `upgrade-${Math.random()}`;
+    const old = new Dexie(name);
+    old.version(3).stores({ settings: 'key', budgets: 'categoryId', transactions: 'id, accountId, importId, date, categoryId, merchant, fingerprint, decisionId' });
+    await old.open();
+    await old.table('settings').put({ key: 'dismissedRecurring', value: ['out:A', 'out:B'] });
+    old.close();
+    const upgraded = new DecisionLabDb(name);
+    await upgraded.open();
+    expect((await upgraded.recurringOverrides.toArray()).map((o) => `${o.key}:${o.status}`).sort()).toEqual(['out:A:dismissed', 'out:B:dismissed']);
+    expect(await upgraded.settings.get('dismissedRecurring')).toBeUndefined();
+    upgraded.close();
+  });
+
+  it('migrates dismissed-recurring settings in a v3 backup', () => {
+    const v3 = { format: 'decisionlab-backup', version: 3, exportedAt: '2026-11-01T00:00:00Z', data: { settings: [{ key: 'dismissedRecurring', value: ['out:A'] }, { key: 'seeded', value: true }] } };
+    const b = migrateBackup(v3);
+    expect(b.version).toBe(4);
+    expect(b.data.recurringOverrides).toEqual([{ key: 'out:A', status: 'dismissed', updatedAt: '2026-11-01T00:00:00Z' }]);
+    expect((b.data.settings as { key: string }[]).map((r) => r.key)).toEqual(['seeded']);
+  });
+});
+
+describe('demo statement balances', () => {
+  it('derives known balances from the demo statements, which reconcile exactly', async () => {
+    const { balanceGaps } = await import('@/engine/balances');
+    await loadDemoData('2026-11-20');
+    const accounts = await db.accounts.toArray();
+    expect(accounts.every((a) => a.statementBalance && !a.balance)).toBe(true);
+    for (const a of accounts) {
+      const txns = await db.transactions.where('accountId').equals(a.id).toArray();
+      expect(balanceGaps(txns)).toEqual([]);
+      const opening = a.name.includes('Savings') ? 400_000 : 120_000;
+      expect(a.statementBalance!.amount).toBe(opening + txns.reduce((s, t) => s + t.amount, 0));
+    }
   });
 });

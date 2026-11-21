@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Line, ComposedChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts';
-import { Badge, Button, Card, CategoryDot, EmptyState, InfoTip, Input, Metric, PageHeader, Segmented, Select, Spinner } from '@/ui/components';
+import { Badge, Button, Card, CategoryDot, EmptyState, Input, Metric, PageHeader, Segmented, Select, Spinner } from '@/ui/components';
 import { ChartWithTable, MoneyTooltip, SERIES, NEUTRAL, SimpleTable, axisProps, moneyTick } from '@/ui/charts';
 import { useAnalytics } from '@/hooks/useAppData';
 import { categoryTrend, comparePeriods, spendingByCategory, summarise } from '@/engine/cashflow';
@@ -9,10 +9,10 @@ import { addMonths, firstDayOfMonth, formatDate, formatMonth, isIsoDate, lastDay
 import { formatMoney, formatPercent } from '@/domain/money';
 import { merchantLabel } from '@/engine/merchant';
 import { DEFINITIONS } from '@/ui/definitions';
-import { db } from '@/data/db';
-import { SETTING_KEYS, getSetting, setSetting } from '@/data/settings';
 import { useNavigate } from 'react-router-dom';
 import { BudgetsCard } from './BudgetsCard';
+import { RecurringCard } from './RecurringCard';
+import { BalancesCard } from './BalancesCard';
 
 type Period = '3' | '6' | '12' | 'all';
 
@@ -85,8 +85,6 @@ export function SpendingPage() {
   }
 
   const n = months.length;
-  const recurringOut = a.recurring.filter((r) => r.direction === 'out');
-  const recurringIn = a.recurring.filter((r) => r.direction === 'in');
 
   return (
     <div className="grid gap-5">
@@ -304,58 +302,9 @@ export function SpendingPage() {
         </>
       )}
 
-      <Card
-        title={
-          <span className="inline-flex items-center gap-2">
-            Recurring payments <InfoTip>{DEFINITIONS.recurring}</InfoTip>
-          </span>
-        }
-        description="Detected automatically — check them. Dismiss anything that isn't really recurring."
-      >
-        {a.recurring.length === 0 ? (
-          <p className="text-sm text-ink-2">No regular payments detected yet (needs at least three occurrences).</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <SimpleTable
-              headers={['Merchant', 'Cadence', 'Typical', 'Per month', 'Next expected', 'Confidence', '']}
-              align={['left', 'left', 'right', 'right', 'left', 'right', 'right']}
-              rows={[...recurringOut, ...recurringIn].map((r) => [
-                <span key="m">
-                  {merchantLabel(r.merchant)} {!r.active && <Badge>Possibly ended</Badge>} {r.direction === 'in' && <Badge tone="good">Income</Badge>}
-                </span>,
-                r.cadence,
-                formatMoney(r.typicalAmount),
-                formatMoney(r.monthlyEquivalent),
-                r.active ? formatDate(r.nextExpected) : '—',
-                `${Math.round(r.confidence * 100)}%`,
-                <Button
-                  key="d"
-                  size="sm"
-                  variant="ghost"
-                  onClick={async () => {
-                    const current = await getSetting<string[]>(SETTING_KEYS.dismissedRecurring, []);
-                    await setSetting(SETTING_KEYS.dismissedRecurring, [...current, r.key]);
-                  }}
-                >
-                  Dismiss
-                </Button>,
-              ])}
-            />
-            <p className="mt-2 text-xs text-muted">
-              Active recurring outgoings total {formatMoney(-recurringOut.filter((r) => r.active).reduce((s, r) => s + r.monthlyEquivalent, 0))} per month (monthly equivalent).
-              {' '}
-              <button
-                className="underline"
-                onClick={async () => {
-                  await db.settings.delete(SETTING_KEYS.dismissedRecurring);
-                }}
-              >
-                Restore dismissed
-              </button>
-            </p>
-          </div>
-        )}
-      </Card>
+      <RecurringCard a={a} />
+
+      <BalancesCard a={a} />
 
       <Card title="Unusually large transactions" description="Purchases far above what is typical for their category (robust z-score > 3.5, categories with ≥ 8 transactions).">
         {anomalies.length === 0 ? (

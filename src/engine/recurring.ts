@@ -7,7 +7,8 @@
  * UI labels results as "estimated" and lets the user dismiss them.
  */
 import type { Cents } from '@/domain/money';
-import { addDays, daysBetween, type IsoDate } from '@/domain/dates';
+import { addDays, daysBetween, daysInMonth, parseIso, toIsoDate, type IsoDate } from '@/domain/dates';
+import type { RecurringOverride } from '@/domain/types';
 import { mean, median, stdev } from './stats';
 
 export type Cadence = 'weekly' | 'fortnightly' | 'monthly' | 'quarterly' | 'annual';
@@ -90,7 +91,7 @@ export function detectRecurring(
     const typical = Math.round(median(amounts));
     const sign = key.startsWith('out:') ? -1 : 1;
     const lastDate = days.at(-1)!;
-    const nextExpected = addDays(lastDate, Math.round(spec.days));
+    const nextExpected = stepCadence(lastDate, spec.cadence, 1);
     const active = !asOf || daysBetween(lastDate, asOf) <= spec.days * 1.5 + spec.tolerance;
     const categoryCounts = new Map<string | null, number>();
     for (const t of sorted) categoryCounts.set(t.categoryId, (categoryCounts.get(t.categoryId) ?? 0) + 1);
@@ -113,4 +114,105 @@ export function detectRecurring(
     });
   }
   return results.sort((a, b) => Math.abs(b.monthlyEquivalent) - Math.abs(a.monthlyEquivalent));
+}
+
+/**
+ * Move a date by n cadence periods. Weekly/fortnightly step in days; monthly, quarterly and
+ * annual step in calendar months, keeping the day of month (clamped to the month's length,
+ * so 31 Jan + 1 month = 28/29 Feb).
+ */
+export function stepCadence(date: IsoDate, cadence: Cadence, n: number): IsoDate {
+  if (cadence === 'weekly') return addDays(date, 7 * n);
+  if (cadence === 'fortnightly') return addDays(date, 14 * n);
+  const months = (cadence === 'monthly' ? 1 : cadence === 'quarterly' ? 3 : 12) * n;
+  const { year, month, day } = parseIso(date);
+  const total = year * 12 + (month - 1) + months;
+  const y = Math.floor(total / 12);
+  const m = (total % 12) + 1;
+  return toIsoDate(y, m, Math.min(day, daysInMonth(y, m)));
+}
+
+/** Dates of a series' occurrences (past and projected) within [start, end]. */
+export function occurrences(series: Pick<RecurringSeries, 'lastDate' | 'cadence'>, start: IsoDate, end: IsoDate): IsoDate[] {
+  const out: IsoDate[] = [];
+  // Step back from the last payment, then forward, always from the anchor to avoid drift.
+  for (let n = 0; n > -1000; n--) {
+    const d = stepCadence(series.lastDate, series.cadence, n);
+    if (d < start) break;
+    if (d <= end) out.push(d);
+  }
+  for (let n = 1; n < 1000; n++) {
+    const d = stepCadence(series.lastDate, series.cadence, n);
+    if (d > end) break;
+    if (d >= start) out.push(d);
+  }
+  return out.sort();
+}
+
+export interface EffectiveSeries extends RecurringSeries {
+  /** Display name (user label or merchant). */
+  label: string;
+  confirmed: boolean;
+  /** True when the expected amount comes from the user rather than detection. */
+  amountOverridden: boolean;
+}
+
+const PER_MONTH: Record<Cadence, number> = Object.fromEntries(CADENCES.map((c) => [c.cadence, c.perMonth])) as Record<Cadence, number>;
+
+/** Apply user overrides: drop dismissed series, use labels and expected amounts. */
+export function applyOverrides(series: RecurringSeries[], overrides: RecurringOverride[]): EffectiveSeries[] {
+  const byKey = new Map(overrides.map((o) => [o.key, o]));
+  return series
+    .filter((s) => byKey.get(s.key)?.status !== 'dismissed')
+    .map((s) => {
+      const o = byKey.get(s.key);
+      const amount = o?.expectedAmount ?? s.typicalAmount;
+      const sign = s.direction === 'out' ? -1 : 1;
+      return {
+        ...s,
+        label: o?.label || s.merchant,
+        confirmed: o?.status === 'confirmed',
+        amountOverridden: o?.expectedAmount !== undefined,
+        typicalAmount: amount,
+        monthlyEquivalent: Math.round(sign * amount * PER_MONTH[s.cadence]),
+      };
+    });
+}
+
+export interface UpcomingBill {
+  key: string;
+  label: string;
+  date: IsoDate;
+  /** Positive amount expected to go out. */
+  amount: Cents;
+  categoryId: string | null;
+}
+
+/** Projected (not yet paid) occurrences of active outgoing series between `from` and `to` inclusive. */
+export function upcomingBills(series: (RecurringSeries & { label?: string })[], from: IsoDate, to: IsoDate): UpcomingBill[] {
+  const out: UpcomingBill[] = [];
+  for (const s of series) {
+    if (!s.active || s.direction !== 'out') continue;
+    for (const d of occurrences(s, from, to)) {
+      if (d <= s.lastDate) continue; // already paid
+      out.push({ key: s.key, label: s.label ?? s.merchant, date: d, amount: s.typicalAmount, categoryId: s.categoryId });
+    }
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date) || b.amount - a.amount);
+}
+
+/**
+ * Bills expected before the next regular income arrives. Money needed for these is not really
+ * available for discretionary decisions even though it is sitting in the account today.
+ * Returns null when no active recurring income is detected.
+ */
+export function billsBeforeNextIncome(series: (RecurringSeries & { label?: string })[], today: IsoDate): { nextIncome: IsoDate; bills: UpcomingBill[]; total: Cents } | null {
+  const incomeDates = series
+    .filter((s) => s.active && s.direction === 'in')
+    .map((s) => occurrences(s, addDays(today, 1), addDays(today, 400)).find((d) => d > s.lastDate))
+    .filter((d): d is IsoDate => d !== undefined);
+  if (incomeDates.length === 0) return null;
+  const nextIncome = incomeDates.sort()[0]!;
+  const bills = upcomingBills(series, today, addDays(nextIncome, -1));
+  return { nextIncome, bills, total: bills.reduce((a, b) => a + b.amount, 0) };
 }

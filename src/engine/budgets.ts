@@ -2,10 +2,12 @@
  * Category budgets: planned monthly spending per expense category compared with actual
  * net spending (refunds reduce it; split parts are attributed to their own categories).
  *
- * Pace: in the current (partial) month, the expected share of the budget used so far is
- * the elapsed share of the month (day ÷ days in month). Status:
+ * Pace (current month only): expected spending so far =
+ *   recurring bills in the category already due this month (they are lumpy, not spread)
+ *   + the rest of the budget × elapsed share of the month (day ÷ days in month).
+ * Status:
  *   over     actual > budget
- *   atRisk   current month and actual > budget × elapsed share × 1.1 (spending faster than plan)
+ *   atRisk   current month and actual > expected so far × 1.1
  *   onTrack  otherwise
  * Past months are judged on the full budget only.
  */
@@ -13,6 +15,7 @@ import type { Cents } from '@/domain/money';
 import type { Budget, Category } from '@/domain/types';
 import { daysInMonth, firstDayOfMonth, lastDayOfMonth, monthKey, type IsoDate, type MonthKey } from '@/domain/dates';
 import { categoryTrend, spendingByCategory, type AnalysedTxn } from './cashflow';
+import { occurrences, type RecurringSeries } from './recurring';
 import { median } from './stats';
 
 export type BudgetStatus = 'onTrack' | 'atRisk' | 'over';
@@ -24,6 +27,10 @@ export interface BudgetLine {
   remaining: Cents;
   usedShare: number;
   status: BudgetStatus;
+  /** Spending expected by today under the plan (current month), or the budget for past months. */
+  expectedByNow: Cents;
+  /** Recurring bills in this category expected during the month. */
+  billsThisMonth: Cents;
 }
 
 export interface BudgetReport {
@@ -41,7 +48,14 @@ export interface BudgetReport {
 
 export const AT_RISK_TOLERANCE = 1.1;
 
-export function budgetReport(lines: AnalysedTxn[], categories: Map<string, Category>, budgets: Budget[], month: MonthKey, today: IsoDate): BudgetReport {
+export function budgetReport(
+  lines: AnalysedTxn[],
+  categories: Map<string, Category>,
+  budgets: Budget[],
+  month: MonthKey,
+  today: IsoDate,
+  recurring: Pick<RecurringSeries, 'lastDate' | 'cadence' | 'direction' | 'active' | 'typicalAmount' | 'categoryId'>[] = [],
+): BudgetReport {
   const current = monthKey(today) === month;
   const [y, m] = month.split('-').map(Number) as [number, number];
   const elapsed = current ? Number(today.slice(8, 10)) / daysInMonth(y, m) : month < monthKey(today) ? 1 : 0;
@@ -51,11 +65,24 @@ export function budgetReport(lines: AnalysedTxn[], categories: Map<string, Categ
     return b.monthlyAmount > 0 && c?.kind === 'expense' && !c.archived;
   });
   const budgeted = new Set(active.map((b) => b.categoryId));
+  const start = firstDayOfMonth(month);
+  const end = lastDayOfMonth(month);
   const out: BudgetLine[] = active.map((b) => {
     const actual = actualByCat.get(b.categoryId) ?? 0;
     const usedShare = actual / b.monthlyAmount;
-    const status: BudgetStatus = actual > b.monthlyAmount ? 'over' : current && actual > b.monthlyAmount * elapsed * AT_RISK_TOLERANCE ? 'atRisk' : 'onTrack';
-    return { categoryId: b.categoryId, budget: b.monthlyAmount, actual, remaining: b.monthlyAmount - actual, usedShare, status };
+    let billsThisMonth = 0;
+    let billsDue = 0;
+    for (const r of recurring) {
+      if (!r.active || r.direction !== 'out' || r.categoryId !== b.categoryId) continue;
+      for (const d of occurrences(r, start, end)) {
+        billsThisMonth += r.typicalAmount;
+        if (d <= today) billsDue += r.typicalAmount;
+      }
+    }
+    const flexible = Math.max(0, b.monthlyAmount - billsThisMonth);
+    const expectedByNow = current ? Math.min(b.monthlyAmount, Math.round(billsDue + flexible * elapsed)) : b.monthlyAmount;
+    const status: BudgetStatus = actual > b.monthlyAmount ? 'over' : current && actual > expectedByNow * AT_RISK_TOLERANCE ? 'atRisk' : 'onTrack';
+    return { categoryId: b.categoryId, budget: b.monthlyAmount, actual, remaining: b.monthlyAmount - actual, usedShare, status, expectedByNow, billsThisMonth };
   });
   let unbudgetedActual = 0;
   for (const [id, total] of actualByCat) if (id === null || !budgeted.has(id)) unbudgetedActual += total;

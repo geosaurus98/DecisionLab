@@ -36,7 +36,6 @@ export const SETTING_KEYS = {
   profile: 'financialProfile',
   assumptions: 'defaultAssumptions',
   seeded: 'seeded',
-  dismissedRecurring: 'dismissedRecurring',
 } as const;
 
 export async function getSetting<T>(key: string, fallback: T): Promise<T> {

@@ -10,6 +10,8 @@ import { mulberry32, pick, randInt, type Rng } from '@/engine/random';
 import { toCsv } from '@/engine/csv';
 
 export const DEMO_SEED = 20261120;
+/** Opening balances (cents) at the start of the demo period. */
+export const DEMO_OPENING = { everyday: 120_000, savings: 400_000 };
 
 interface Row {
   date: IsoDate;
@@ -113,12 +115,18 @@ export function generateDemoData(today: IsoDate, seed = DEMO_SEED): DemoData {
   const refundMonth = months[Math.max(0, months.length - 3)]!;
   add(everyday, dateIn(refundMonth, 10), 4_999, 'KMART PETONE', 'REFUND', '', '');
 
-  const toFile = (rows: Row[]) =>
-    toCsv(
-      ['Date', 'Amount', 'Payee', 'Particulars', 'Code', 'Reference'],
+  // Statements include a running balance column (oldest first), like many NZ bank exports.
+  const toFile = (rows: Row[], opening: number) => {
+    let balance = opening;
+    return toCsv(
+      ['Date', 'Amount', 'Payee', 'Particulars', 'Code', 'Reference', 'Balance'],
       rows
         .sort((a, b) => a.date.localeCompare(b.date))
-        .map((r) => [fmtDate(r.date), fmtAmount(r.amount), r.payee, r.particulars, r.code, r.reference]),
+        .map((r) => {
+          balance += r.amount;
+          return [fmtDate(r.date), fmtAmount(r.amount), r.payee, r.particulars, r.code, r.reference, fmtAmount(balance)];
+        }),
     );
-  return { everydayCsv: toFile(everyday), savingsCsv: toFile(savings), start, end: today };
+  };
+  return { everydayCsv: toFile(everyday, DEMO_OPENING.everyday), savingsCsv: toFile(savings, DEMO_OPENING.savings), start, end: today };
 }

@@ -19,13 +19,14 @@ import type {
   Goal,
   ImportBatch,
   ImportProfile,
+  RecurringOverride,
   MerchantMemory,
   ScenarioSet,
   Transaction,
 } from '@/domain/types';
 
 export const DB_NAME = 'decisionlab';
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export class DecisionLabDb extends Dexie {
   accounts!: Table<Account, string>;
@@ -40,6 +41,7 @@ export class DecisionLabDb extends Dexie {
   scenarioSets!: Table<ScenarioSet, string>;
   settings!: Table<AppSettingRecord, string>;
   budgets!: Table<Budget, string>;
+  recurringOverrides!: Table<RecurringOverride, string>;
 
   constructor(name = DB_NAME) {
     super(name);
@@ -63,6 +65,17 @@ export class DecisionLabDb extends Dexie {
     });
     // v3: monthly budgets per expense category.
     this.version(3).stores({ budgets: 'categoryId' });
+    // v4: user edits to detected recurring series. The old "dismissed" list kept in settings
+    // is migrated into the new table.
+    this.version(4)
+      .stores({ recurringOverrides: 'key' })
+      .upgrade(async (tx) => {
+        const rec = await tx.table('settings').get('dismissedRecurring');
+        const keys = (rec?.value as string[] | undefined) ?? [];
+        const now = new Date().toISOString();
+        await tx.table('recurringOverrides').bulkPut(keys.map((key) => ({ key, status: 'dismissed', updatedAt: now })));
+        await tx.table('settings').delete('dismissedRecurring');
+      });
   }
 }
 
@@ -79,6 +92,7 @@ export const TABLE_NAMES = [
   'scenarioSets',
   'settings',
   'budgets',
+  'recurringOverrides',
 ] as const;
 export type TableName = (typeof TABLE_NAMES)[number];
 

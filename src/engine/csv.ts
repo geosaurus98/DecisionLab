@@ -73,6 +73,7 @@ const DEBIT_HINTS = ['debit', 'withdrawal', 'withdrawals', 'money out', 'paid ou
 const CREDIT_HINTS = ['credit', 'deposit', 'deposits', 'money in', 'paid in'];
 const DESC_HINTS = ['description', 'details', 'payee', 'particulars', 'memo', 'narrative', 'transaction details', 'merchant'];
 const REF_HINTS = ['reference', 'ref', 'code'];
+const BALANCE_HINTS = ['balance', 'closing balance', 'running balance'];
 
 function findHeader(headers: string[], hints: string[]): string | undefined {
   const lower = headers.map((h) => h.toLowerCase());
@@ -100,6 +101,7 @@ export function suggestMapping(parsed: ParsedCsv): Partial<CsvMapping> {
     dateColumn,
     descriptionColumns,
     referenceColumn: findHeader(headers, REF_HINTS),
+    balanceColumn: findHeader(headers, BALANCE_HINTS),
   };
   if (amountColumn) {
     mapping.amountMode = 'signed';
@@ -124,6 +126,8 @@ export interface MappedRow {
   amount: Cents | null;
   description: string;
   reference?: string;
+  /** Running balance after this row, if a balance column is mapped and the cell is not empty. */
+  balance?: Cents | null;
   original: Record<string, string>;
   errors: string[];
 }
@@ -186,8 +190,15 @@ export function mapRows(rows: Record<string, string>[], mapping: CsvMapping): Ma
       .trim();
     if (!description) errors.push('Empty description.');
     const reference = mapping.referenceColumn ? row[mapping.referenceColumn] || undefined : undefined;
+    let balance: Cents | null | undefined;
+    if (mapping.balanceColumn) {
+      const raw = row[mapping.balanceColumn] ?? '';
+      // A missing or unreadable balance cell does not block the transaction; it is just not
+      // used for balance checks.
+      balance = raw.trim() === '' ? null : parseMoney(raw);
+    }
 
-    return { rowNumber: i + 1, date, amount, description, reference, original: { ...row }, errors };
+    return { rowNumber: i + 1, date, amount, description, reference, balance, original: { ...row }, errors };
   });
 }
 

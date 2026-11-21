@@ -16,6 +16,7 @@ export const DEMO_MAPPING: CsvMapping = {
   amountColumn: 'Amount',
   descriptionColumns: ['Payee', 'Particulars'],
   referenceColumn: 'Reference',
+  balanceColumn: 'Balance',
 };
 
 export async function hasDemoData(): Promise<boolean> {
@@ -36,7 +37,7 @@ export async function loadDemoData(today = todayIso()): Promise<void> {
       type: 'everyday',
       currency: 'NZD',
       includeInLiquid: true,
-      balance: { amount: 284_055, asOf: today },
+      // No manual balance: it comes from the statement's balance column on import.
       isDemo: true,
       createdAt: now,
     },
@@ -47,7 +48,6 @@ export async function loadDemoData(today = todayIso()): Promise<void> {
       type: 'savings',
       currency: 'NZD',
       includeInLiquid: true,
-      balance: { amount: 912_000, asOf: today },
       isDemo: true,
       createdAt: now,
     },

@@ -25,6 +25,8 @@ export interface Account {
   currency: 'NZD';
   /** Manually entered balance snapshot. A balance is never inferred as spendable. */
   balance?: { amount: Cents; asOf: IsoDate };
+  /** Closing balance read from the most recent imported statement with a balance column. */
+  statementBalance?: { amount: Cents; asOf: IsoDate; importId: Id };
   /** Whether the balance counts towards liquid funds in the flexibility estimate. */
   includeInLiquid: boolean;
   /** True for accounts created by the demonstration dataset. */
@@ -89,6 +91,10 @@ export interface Transaction {
   fingerprint: string;
   /** Original CSV row values, kept unchanged for auditing. */
   original?: Record<string, string>;
+  /** Account balance after this transaction, as printed on the statement (if it had a balance column). */
+  balanceAfter?: Cents;
+  /** 0-based position of the row in its source file (orders same-day transactions). */
+  rowIndex?: number;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -111,6 +117,19 @@ export interface CategoryRule {
   /** Lower numbers run first. */
   priority: number;
   createdAt: Timestamp;
+}
+
+/**
+ * User edits to a detected recurring series (keyed by the detector's series key, e.g.
+ * "out:SPARK NZ"). Overrides survive re-detection because keys are stable.
+ */
+export interface RecurringOverride {
+  key: string;
+  status: 'confirmed' | 'dismissed';
+  label?: string;
+  /** Expected amount per occurrence (positive cents); replaces the detected typical amount. */
+  expectedAmount?: Cents;
+  updatedAt: Timestamp;
 }
 
 /** Learned from manual corrections: transactions with this merchant key get this category. */
@@ -137,6 +156,8 @@ export interface CsvMapping {
   /** One or more columns joined with " " to form the description. */
   descriptionColumns: string[];
   referenceColumn?: string;
+  /** Running balance column, if the statement has one. */
+  balanceColumn?: string;
 }
 
 export interface ImportBatch {

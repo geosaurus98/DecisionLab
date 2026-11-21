@@ -77,7 +77,20 @@ function AccountsSection() {
                   {a.institution ? ` · ${a.institution}` : ''}
                 </p>
               </div>
-              <span className="tabular">{a.balance ? `${formatMoney(a.balance.amount)} as of ${a.balance.asOf}` : <span className="text-muted">No balance entered</span>}</span>
+              <span className="grid text-right tabular">
+                {a.statementBalance && (
+                  <span>
+                    {formatMoney(a.statementBalance.amount)} <Badge tone="good">From statement</Badge> <span className="text-xs text-muted">{a.statementBalance.asOf}</span>
+                  </span>
+                )}
+                {a.balance ? (
+                  <span className={a.statementBalance ? 'text-xs text-muted' : ''}>
+                    {formatMoney(a.balance.amount)} entered, as of {a.balance.asOf}
+                  </span>
+                ) : (
+                  !a.statementBalance && <span className="text-muted">No balance</span>
+                )}
+              </span>
               <Button size="sm" onClick={() => setEditing(a)}>
                 Edit
               </Button>
@@ -135,7 +148,7 @@ function AccountsSection() {
             <Field label="Institution (optional)" htmlFor="acc-inst">
               <Input id="acc-inst" value={editing.institution ?? ''} onChange={(e) => setEditing({ ...editing, institution: e.target.value })} />
             </Field>
-            <Field label="Current balance" htmlFor="acc-bal" hint="Leave blank if unknown">
+            <Field label="Current balance" htmlFor="acc-bal" hint="Leave blank if unknown. A more recent balance from an imported statement takes precedence.">
               <MoneyInput
                 id="acc-bal"
                 allowNegative

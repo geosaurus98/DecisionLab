@@ -15,7 +15,7 @@ import { isIsoDate } from '@/domain/dates';
 
 export const BACKUP_FORMAT = 'decisionlab-backup';
 export const ENCRYPTED_FORMAT = 'decisionlab-encrypted-backup';
-export const BACKUP_VERSION = 3;
+export const BACKUP_VERSION = 4;
 export const PBKDF2_ITERATIONS = 600_000;
 
 const isoDate = z.string().refine(isIsoDate, 'Invalid date');
@@ -69,6 +69,7 @@ const schemas: Record<TableName, z.ZodType> = {
   scenarioSets: z.looseObject({ id, name: z.string(), base: z.looseObject({}), variants: z.array(z.looseObject({ id })) }),
   settings: z.looseObject({ key: z.string() }),
   budgets: z.looseObject({ categoryId: id, monthlyAmount: cents }),
+  recurringOverrides: z.looseObject({ key: z.string(), status: z.enum(['confirmed', 'dismissed']) }),
 };
 
 const backupSchema = z.object({
@@ -92,6 +93,8 @@ export async function exportBackup(): Promise<BackupFile> {
  *   sets gained optional `monteCarlo`. All optional, so no data changes are needed.
  * - v2 → v3: new `budgets` table (empty for older backups); optional `pairwise`,
  *   `extraFlows`, `goalId` and goal `accountId` fields.
+ * - v3 → v4: new `recurringOverrides` table; the `dismissedRecurring` setting becomes
+ *   dismissed overrides. Optional `balanceAfter`, `rowIndex`, `statementBalance` fields.
  */
 export function migrateBackup(raw: unknown): BackupFile {
   const parsed = backupSchema.safeParse(raw);
@@ -102,6 +105,17 @@ export function migrateBackup(raw: unknown): BackupFile {
   }
   if (backup.version === 1) backup.version = 2;
   if (backup.version === 2) backup.version = 3;
+  if (backup.version === 3) {
+    const settings = (backup.data.settings ?? []) as { key: string; value: unknown }[];
+    const dismissed = settings.find((r) => r.key === 'dismissedRecurring');
+    const keys = Array.isArray(dismissed?.value) ? (dismissed.value as string[]) : [];
+    backup.data.recurringOverrides = [
+      ...((backup.data.recurringOverrides as unknown[] | undefined) ?? []),
+      ...keys.map((key) => ({ key, status: 'dismissed', updatedAt: backup.exportedAt })),
+    ];
+    backup.data.settings = settings.filter((r) => r.key !== 'dismissedRecurring');
+    backup.version = 4;
+  }
   for (const name of TABLE_NAMES) backup.data[name] ??= [];
   return backup;
 }

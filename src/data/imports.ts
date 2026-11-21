@@ -7,6 +7,7 @@ import { classifyDuplicates, countBaseKeys } from '@/engine/dedupe';
 import { categorise, memoryMap, sortRules, type CategorisationResult } from '@/engine/categorise';
 import { normaliseMerchant } from '@/engine/merchant';
 import type { CsvMapping, ImportBatch, Transaction } from '@/domain/types';
+import { balanceGaps, closingBalance, type BalanceGap, type BalanceRow } from '@/engine/balances';
 import { newId, nowTimestamp } from '@/domain/ids';
 
 export type PreviewStatus = 'new' | 'duplicate' | 'error';
@@ -23,6 +24,10 @@ export interface ImportPreview {
   counts: Record<PreviewStatus, number>;
   dateRange?: { start: string; end: string };
   netTotal: number;
+  /** Closing balance printed in this file (when a balance column is mapped). */
+  closingBalance?: { amount: number; asOf: string } | null;
+  /** Places where the file's own running balance does not reconcile with its amounts. */
+  balanceGaps: BalanceGap[];
 }
 
 export async function previewImport(accountId: string, rows: Record<string, string>[], mapping: CsvMapping): Promise<ImportPreview> {
@@ -48,7 +53,13 @@ export async function previewImport(accountId: string, rows: Record<string, stri
   const counts = { new: 0, duplicate: 0, error: 0 };
   for (const r of out) counts[r.status]++;
   const dates = out.filter((r) => r.status === 'new').map((r) => r.date!).sort();
+  const fileRows: BalanceRow[] = out
+    .filter((r) => r.status !== 'error')
+    .map((r) => ({ id: String(r.rowNumber), date: r.date!, amount: r.amount!, balanceAfter: r.balance ?? null, rowIndex: r.rowNumber - 1, importId: 'file' }));
+  const hasBalances = fileRows.some((r) => r.balanceAfter != null);
   return {
+    closingBalance: hasBalances ? closingBalance(fileRows) : null,
+    balanceGaps: hasBalances ? balanceGaps(fileRows) : [],
     rows: out,
     counts,
     dateRange: dates.length ? { start: dates[0]!, end: dates.at(-1)! } : undefined,
@@ -95,10 +106,20 @@ export async function commitImport(args: {
       ruleId: r.categorisation?.ruleId,
       fingerprint: r.fingerprint!,
       original: r.original,
+      balanceAfter: r.balance ?? undefined,
+      rowIndex: r.rowNumber - 1,
       createdAt: now,
       updatedAt: now,
     }));
-  await db.transaction('rw', db.imports, db.transactions, async () => {
+  await db.transaction('rw', db.imports, db.transactions, db.accounts, async () => {
+    // A statement's closing balance becomes the account's known balance if it is the newest.
+    const closing = preview.closingBalance;
+    if (closing) {
+      const account = await db.accounts.get(accountId);
+      if (account && (!account.statementBalance || closing.asOf >= account.statementBalance.asOf)) {
+        await db.accounts.update(accountId, { statementBalance: { amount: closing.amount, asOf: closing.asOf, importId: batch.id } });
+      }
+    }
     // Re-check duplicates inside the write transaction in case another import ran meanwhile.
     const existing = new Set((await db.transactions.where('accountId').equals(accountId).toArray()).map((t) => t.fingerprint));
     const fresh = txns.filter((t) => !existing.has(t.fingerprint));
@@ -112,11 +133,21 @@ export async function commitImport(args: {
 
 /** Remove every transaction created by an import. The batch record is kept (status 'undone') for history. */
 export async function undoImport(importId: string): Promise<number> {
-  return db.transaction('rw', db.imports, db.transactions, async () => {
+  return db.transaction('rw', db.imports, db.transactions, db.accounts, async () => {
     const batch = await db.imports.get(importId);
     if (!batch || batch.status === 'undone') return 0;
     const removed = await db.transactions.where('importId').equals(importId).delete();
     await db.imports.update(importId, { status: 'undone', undoneAt: nowTimestamp() });
+    // If this import supplied the account's statement balance, recompute it from what remains.
+    const account = await db.accounts.get(batch.accountId);
+    if (account?.statementBalance?.importId === importId) {
+      const remaining = await db.transactions.where('accountId').equals(batch.accountId).toArray();
+      const closing = closingBalance(remaining);
+      const source = closing ? remaining.find((t) => t.id === closing.rowId) : undefined;
+      await db.accounts.update(batch.accountId, {
+        statementBalance: closing && source?.importId ? { amount: closing.amount, asOf: closing.asOf, importId: source.importId } : undefined,
+      });
+    }
     return removed;
   });
 }

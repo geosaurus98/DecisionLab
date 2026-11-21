@@ -20,7 +20,7 @@ export function BudgetsCard({ a }: { a: Analytics }) {
   const current = monthKey(a.today);
   const [month, setMonth] = useState(current);
   const [editing, setEditing] = useState(false);
-  const report = useMemo(() => (budgets ? budgetReport(a.lines, a.categoryMap, budgets, month, a.today) : null), [a.lines, a.categoryMap, budgets, month, a.today]);
+  const report = useMemo(() => (budgets ? budgetReport(a.lines, a.categoryMap, budgets, month, a.today, a.recurring) : null), [a.lines, a.categoryMap, budgets, month, a.today, a.recurring]);
   const suggestionMonths = a.completeMonths.slice(-3).map((m) => m.month);
   const suggestions = useMemo(() => suggestBudgets(a.lines, a.categoryMap, suggestionMonths), [a.lines, a.categoryMap, suggestionMonths.join()]);
   const firstMonth = a.months[0]?.month ?? current;
@@ -102,7 +102,9 @@ export function BudgetsCard({ a }: { a: Analytics }) {
                     aria-valuemax={100}
                   >
                     <div className="h-2 rounded" style={{ width: `${pct * 100}%`, background: l.status === 'over' ? 'var(--series-8)' : l.status === 'atRisk' ? 'var(--series-4)' : 'var(--series-1)' }} />
-                    {month === current && <div aria-hidden className="absolute inset-y-[-2px] w-0.5 bg-[var(--ink-2)]" style={{ left: `${report.elapsed * 100}%` }} title="Expected pace today" />}
+                    {month === current && (
+                      <div aria-hidden className="absolute inset-y-[-2px] w-0.5 bg-[var(--ink-2)]" style={{ left: `${Math.min(1, l.expectedByNow / l.budget) * 100}%` }} title="Expected by today" />
+                    )}
                   </div>
                 </li>
               );
@@ -111,7 +113,7 @@ export function BudgetsCard({ a }: { a: Analytics }) {
           <p className="text-xs text-muted">
             Budgeted {formatMoney(report.totalBudget, { whole: true })} ({formatMoney(report.essentialBudget, { whole: true })} essential,{' '}
             {formatMoney(report.discretionaryBudget, { whole: true })} discretionary); spent {formatMoney(report.totalActual, { whole: true })} in budgeted categories and{' '}
-            {formatMoney(report.unbudgetedActual, { whole: true })} elsewhere.{month === current && ' The vertical mark shows where spending would be if it were even across the month.'}
+            {formatMoney(report.unbudgetedActual, { whole: true })} elsewhere.{month === current && ' The vertical mark shows what the plan expects by today: recurring bills on their due dates, the rest spread evenly.'}
           </p>
         </div>
       )}

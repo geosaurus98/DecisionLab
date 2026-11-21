@@ -9,7 +9,7 @@ import { db } from '@/data/db';
 import { DEFAULT_PROFILE, SETTING_KEYS } from '@/data/settings';
 import type { Category, FinancialProfile, Transaction } from '@/domain/types';
 import { monthlySummaries, lastCompleteMonth, type MonthlySummary } from '@/engine/cashflow';
-import { detectRecurring, type RecurringSeries } from '@/engine/recurring';
+import { applyOverrides, detectRecurring, type EffectiveSeries } from '@/engine/recurring';
 import { estimateFlexibility, type FlexibilityEstimate } from '@/engine/flexibility';
 import { toAnalysisLines, type AnalysisLine } from '@/engine/splits';
 import { todayIso, type IsoDate, type MonthKey } from '@/domain/dates';
@@ -38,9 +38,8 @@ export function useProfile(): FinancialProfile | undefined {
   }, []);
 }
 
-export function useDismissedRecurring(): Set<string> {
-  const v = useLiveQuery(() => db.settings.get(SETTING_KEYS.dismissedRecurring), []);
-  return useMemo(() => new Set((v?.value as string[] | undefined) ?? []), [v]);
+export function useRecurringOverrides() {
+  return useLiveQuery(() => db.recurringOverrides.toArray(), []);
 }
 
 export interface Analytics {
@@ -53,7 +52,8 @@ export interface Analytics {
   months: MonthlySummary[];
   /** Months strictly before the current month (complete). */
   completeMonths: MonthlySummary[];
-  recurring: RecurringSeries[];
+  /** Detected recurring series with your edits applied (dismissed ones removed). */
+  recurring: EffectiveSeries[];
   today: IsoDate;
   lastComplete: MonthKey;
 }
@@ -61,7 +61,7 @@ export interface Analytics {
 export function useAnalytics(): Analytics {
   const transactions = useTransactions();
   const categories = useCategories();
-  const dismissed = useDismissedRecurring();
+  const overrides = useRecurringOverrides();
   const today = todayIso();
   return useMemo(() => {
     const txns = transactions ?? [];
@@ -71,15 +71,16 @@ export function useAnalytics(): Analytics {
     const months = monthlySummaries(lines, categoryMap);
     const lastComplete = lastCompleteMonth(today);
     const completeMonths = months.filter((m) => m.month <= lastComplete);
-    const recurring = detectRecurring(
+    const detected = detectRecurring(
       txns.filter((t) => {
         const kind = t.categoryId ? categoryMap.get(t.categoryId)?.kind : undefined;
         return kind !== 'transfer';
       }),
       { asOf: today },
-    ).filter((r) => !dismissed.has(r.key));
+    );
+    const recurring = applyOverrides(detected, overrides ?? []);
     return {
-      loading: transactions === undefined || categories === undefined,
+      loading: transactions === undefined || categories === undefined || overrides === undefined,
       transactions: txns,
       lines,
       categories: cats,
@@ -90,7 +91,7 @@ export function useAnalytics(): Analytics {
       today,
       lastComplete,
     };
-  }, [transactions, categories, dismissed, today]);
+  }, [transactions, categories, overrides, today]);
 }
 
 export function useBudgets() {

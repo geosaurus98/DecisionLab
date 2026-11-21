@@ -9,6 +9,7 @@ import { formatMoney, formatPercent } from '@/domain/money';
 import { DEFINITIONS } from '@/ui/definitions';
 import { useToast } from '@/ui/toast';
 import { FlexibilityPanel } from './FlexibilityPanel';
+import { UpcomingBillsCard } from '../spending/RecurringCard';
 import { STATUS_LABEL } from '../decisions/labels';
 
 export function OverviewPage() {
@@ -112,6 +113,8 @@ export function OverviewPage() {
           <FlexibilityPanel estimate={flex} />
         </Card>
       )}
+
+      {hasData && <UpcomingBillsCard a={a} />}
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Card title="Decisions due for review" description="Compare what you expected with what actually happened.">
