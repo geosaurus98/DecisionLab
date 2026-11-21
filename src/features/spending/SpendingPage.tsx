@@ -12,6 +12,7 @@ import { DEFINITIONS } from '@/ui/definitions';
 import { db } from '@/data/db';
 import { SETTING_KEYS, getSetting, setSetting } from '@/data/settings';
 import { useNavigate } from 'react-router-dom';
+import { BudgetsCard } from './BudgetsCard';
 
 type Period = '3' | '6' | '12' | 'all';
 
@@ -139,6 +140,8 @@ export function SpendingPage() {
               </button>
             </p>
           )}
+
+          <BudgetsCard a={a} />
 
           <Card title="Monthly cash flow" description="Income and spending per month; the line shows net cash flow (after savings contributions).">
             <ChartWithTable

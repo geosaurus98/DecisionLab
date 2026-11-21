@@ -17,6 +17,8 @@ import { useTheme } from '@/ui/theme';
 import { useToast } from '@/ui/toast';
 import { downloadText } from '@/ui/download';
 import { AssumptionsEditor } from '../scenarios/AssumptionsEditor';
+import { goalSaved } from '@/engine/flexibility';
+import { disableReminders, enableReminders, notificationsSupported, REMINDER_KEY, type ReminderSettings } from '@/data/reminders';
 
 type Tab = 'accounts' | 'planning' | 'categories' | 'data' | 'appearance';
 
@@ -33,7 +35,7 @@ export function SettingsPage() {
           { value: 'planning', label: 'Planning & goals' },
           { value: 'categories', label: 'Categories' },
           { value: 'data', label: 'Data & privacy' },
-          { value: 'appearance', label: 'Appearance' },
+          { value: 'appearance', label: 'Reminders & appearance' },
         ]}
       />
       {tab === 'accounts' && <AccountsSection />}
@@ -251,6 +253,7 @@ function PlanningSection() {
 
 function GoalsCard({ goals }: { goals: Goal[] }) {
   const [editing, setEditing] = useState<Goal | null>(null);
+  const accounts = useLiveQuery(() => db.accounts.toArray(), []) ?? [];
   return (
     <Card
       title="Goals"
@@ -266,14 +269,16 @@ function GoalsCard({ goals }: { goals: Goal[] }) {
       ) : (
         <ul className="grid gap-2">
           {goals.map((g) => {
-            const progress = g.targetAmount > 0 ? Math.min(1, g.currentAmount / g.targetAmount) : 0;
+            const saved = goalSaved(g, accounts);
+            const progress = g.targetAmount > 0 ? Math.min(1, Math.max(0, saved / g.targetAmount)) : 0;
             return (
               <li key={g.id} className="rounded-lg border border-border p-3 text-sm">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{g.name}</span>
                   {g.earmarked && <Badge tone="accent">Earmarked</Badge>}
                   <span className="ml-auto tabular">
-                    {formatMoney(g.currentAmount, { whole: true })} / {formatMoney(g.targetAmount, { whole: true })}
+                    {formatMoney(saved, { whole: true })} / {formatMoney(g.targetAmount, { whole: true })}
+                    {g.accountId && ` (from ${accounts.find((a) => a.id === g.accountId)?.name ?? 'deleted account'})`}
                     {g.targetDate ? ` by ${g.targetDate}` : ''}
                   </span>
                   <Button size="sm" onClick={() => setEditing(g)}>
@@ -319,9 +324,21 @@ function GoalsCard({ goals }: { goals: Goal[] }) {
             <Field label="Target amount" htmlFor="g-target">
               <MoneyInput id="g-target" value={editing.targetAmount} onChange={(v) => setEditing({ ...editing, targetAmount: v ?? 0 })} />
             </Field>
-            <Field label="Saved so far" htmlFor="g-current">
-              <MoneyInput id="g-current" value={editing.currentAmount} onChange={(v) => setEditing({ ...editing, currentAmount: v ?? 0 })} />
+            <Field label="Track savings with" htmlFor="g-account" hint="Use an account’s balance as the amount saved">
+              <Select id="g-account" value={editing.accountId ?? ''} onChange={(e) => setEditing({ ...editing, accountId: e.target.value || undefined })}>
+                <option value="">Amount entered below</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} balance
+                  </option>
+                ))}
+              </Select>
             </Field>
+            {!editing.accountId && (
+              <Field label="Saved so far" htmlFor="g-current">
+                <MoneyInput id="g-current" value={editing.currentAmount} onChange={(v) => setEditing({ ...editing, currentAmount: v ?? 0 })} />
+              </Field>
+            )}
             <Field label="Target date (optional)" htmlFor="g-date">
               <Input id="g-date" type="date" value={editing.targetDate ?? ''} onChange={(e) => setEditing({ ...editing, targetDate: e.target.value || undefined })} />
             </Field>
@@ -577,9 +594,38 @@ function DataSection() {
   );
 }
 
+function RemindersCard() {
+  const toast = useToast();
+  const settings = useLiveQuery(() => db.settings.get(REMINDER_KEY), []);
+  const enabled = (settings?.value as ReminderSettings | undefined)?.enabled ?? false;
+  const supported = notificationsSupported();
+  return (
+    <Card
+      title="Review reminders"
+      description="When DecisionLab opens, show a notification (at most once a day) if decisions are due for review. The notification never includes amounts or decision details. Because there is no server, reminders only appear when you open the app."
+    >
+      {!supported ? (
+        <p className="text-sm text-ink-2">This browser does not support notifications. Due reviews are still shown on the Overview and as a badge on Decisions.</p>
+      ) : (
+        <Checkbox
+          label="Remind me about decisions due for review"
+          checked={enabled}
+          onChange={async (v) => {
+            if (!v) return disableReminders();
+            const ok = await enableReminders();
+            toast({ message: ok ? 'Reminders on.' : 'Notifications were blocked by the browser.', tone: ok ? 'good' : 'bad' });
+          }}
+        />
+      )}
+    </Card>
+  );
+}
+
 function AppearanceSection() {
   const [theme, setTheme] = useTheme();
   return (
+    <div className="grid gap-5">
+    <RemindersCard />
     <Card title="Theme">
       <Segmented
         ariaLabel="Theme"
@@ -592,5 +638,6 @@ function AppearanceSection() {
         ]}
       />
     </Card>
+    </div>
   );
 }

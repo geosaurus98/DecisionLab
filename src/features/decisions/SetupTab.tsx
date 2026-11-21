@@ -1,13 +1,17 @@
 import { Button, Card, Field, Input, MoneyInput, Notice, NumberInput, Select, Textarea } from '@/ui/components';
 import type { Criterion, Decision, DecisionCategory, DecisionOption } from '@/domain/types';
 import { newId } from '@/domain/ids';
+import { formatMoney } from '@/domain/money';
 import { CATEGORY_LABEL } from './labels';
 import { RATING_MAX, RATING_MIN } from '@/engine/scoring';
+import { useState } from 'react';
+import { PairwiseWeights } from './PairwiseWeights';
 
 const SUGGESTED_CRITERIA = ['Enjoyment', 'Long-term usefulness', 'Stress / hassle', 'Learning', 'Time cost'];
 
 export function SetupTab({ decision: d, onChange, errors, onNext }: { decision: Decision; onChange: (d: Decision) => void; errors: string[]; onNext: () => void }) {
   const set = (patch: Partial<Decision>) => onChange({ ...d, ...patch });
+  const [pairwiseOpen, setPairwiseOpen] = useState(false);
   const setOption = (id: string, patch: Partial<DecisionOption>) => set({ options: d.options.map((o) => (o.id === id ? { ...o, ...patch } : o)) });
   const setCriterion = (id: string, patch: Partial<Criterion>) => set({ criteria: d.criteria.map((c) => (c.id === id ? { ...c, ...patch } : c)) });
   const setScore = (optionId: string, criterionId: string, value: number | null) =>
@@ -86,6 +90,18 @@ export function SetupTab({ decision: d, onChange, errors, onNext }: { decision: 
               <Field label="Risks and uncertainty" htmlFor={`o-risk-${o.id}`} className="sm:col-span-1 lg:col-span-2">
                 <Input id={`o-risk-${o.id}`} value={o.risks ?? ''} onChange={(e) => setOption(o.id, { risks: e.target.value })} />
               </Field>
+              {o.extraFlows && (
+                <div className="flex flex-wrap items-center gap-2 rounded bg-surface-2 px-2 py-1.5 text-xs text-ink-2 sm:col-span-2 lg:col-span-5">
+                  <span>
+                    Also includes {o.extraFlows.oneOffs.length + o.extraFlows.recurring.length} cash flow(s) from the Scenario Lab
+                    {o.extraFlows.contributionDelta ? ` and a contribution change of ${formatMoney(o.extraFlows.contributionDelta, { signed: true })}/month` : ''}:{' '}
+                    {[...o.extraFlows.oneOffs.map((f) => `${f.label} ${formatMoney(f.amount, { signed: true })} (month ${f.month})`), ...o.extraFlows.recurring.map((f) => `${f.label} ${formatMoney(f.monthlyAmount, { signed: true })}/mo`)].join(' · ')}
+                  </span>
+                  <Button size="sm" variant="ghost" onClick={() => setOption(o.id, { extraFlows: undefined })}>
+                    Remove
+                  </Button>
+                </div>
+              )}
               <div className="flex items-end justify-end">
                 <Button size="sm" variant="ghost" disabled={d.options.length <= 2} onClick={() => removeOption(o.id)}>
                   Remove
@@ -107,6 +123,11 @@ export function SetupTab({ decision: d, onChange, errors, onNext }: { decision: 
             <Button size="sm" variant="ghost" onClick={() => addCriterion({ type: 'measure', direction: 'lower', unit: '' })}>
               Add measured criterion
             </Button>
+            {d.criteria.length >= 2 && (
+              <Button size="sm" variant="ghost" onClick={() => setPairwiseOpen(true)}>
+                Compare in pairs…
+              </Button>
+            )}
           </>
         }
       >
@@ -145,6 +166,18 @@ export function SetupTab({ decision: d, onChange, errors, onNext }: { decision: 
               </div>
             ))}
           </div>
+        )}
+        <PairwiseWeights
+          open={pairwiseOpen}
+          onClose={() => setPairwiseOpen(false)}
+          decision={d}
+          onApply={(pairwise, weights) =>
+            // Weights are stored as whole-number percentages so they stay readable and editable.
+            set({ pairwise, criteria: d.criteria.map((c) => ({ ...c, weight: Math.max(0, Math.round((weights[c.id] ?? 0) * 1000) / 10) })) })
+          }
+        />
+        {d.pairwise && Object.keys(d.pairwise).length > 0 && d.criteria.length >= 2 && (
+          <p className="mt-2 text-xs text-muted">Weights were last derived from pairwise comparisons; editing a weight directly overrides them.</p>
         )}
         {unusedSuggestions.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">

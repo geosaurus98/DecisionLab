@@ -340,3 +340,14 @@ describe('milestone 3: budgets and scenario/decision conversion', () => {
     expect(back.id).not.toBe(set.id);
   });
 });
+
+describe('review reminders', () => {
+  it('counts only decided/completed decisions whose review date has arrived', async () => {
+    const { countDueReviews, maybeNotifyDueReviews } = await import('../reminders');
+    const mk = (status: 'considering' | 'decided' | 'completed' | 'reviewed', reviewDate: string | null) => ({ ...blankDecision(defaultAssumptions('2026-11-20')), status, reviewDate });
+    await Promise.all([mk('decided', '2026-11-01'), mk('completed', '2026-11-20'), mk('decided', '2026-12-01'), mk('reviewed', '2026-10-01'), mk('considering', '2026-10-01'), mk('decided', null)].map(saveDecision));
+    expect(await countDueReviews('2026-11-20')).toBe(2);
+    // No Notification API in Node: must be a silent no-op.
+    await expect(maybeNotifyDueReviews('2026-11-20')).resolves.toBeUndefined();
+  });
+});

@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useEffect, useRef } from 'react';
 import { cx } from '@/ui/components';
-import { useHasDemo } from '@/hooks/useAppData';
+import { useDueReviewCount, useHasDemo } from '@/hooks/useAppData';
 import { removeDemoData } from '@/data/backup';
 import { useToast } from '@/ui/toast';
 
@@ -25,6 +25,13 @@ function Icon({ d }: { d: string }) {
 
 export function AppShell() {
   const hasDemo = useHasDemo();
+  const due = useDueReviewCount();
+  const badge = (to: string) =>
+    to === '/decisions' && due > 0 ? (
+      <span className="ml-auto rounded-full bg-accent px-1.5 text-[10px] font-semibold leading-4 text-accent-ink" aria-label={`${due} due for review`}>
+        {due}
+      </span>
+    ) : null;
   const toast = useToast();
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
@@ -56,6 +63,7 @@ export function AppShell() {
             >
               <Icon d={n.icon} />
               {n.label}
+              {badge(n.to)}
             </NavLink>
           ))}
         </nav>
@@ -95,7 +103,14 @@ export function AppShell() {
             end={n.to === '/'}
             className={({ isActive }) => cx('flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium', isActive ? 'text-accent' : 'text-ink-2')}
           >
-            <Icon d={n.icon} />
+            <span className="relative">
+              <Icon d={n.icon} />
+              {n.to === '/decisions' && due > 0 && (
+                <span className="absolute -right-2 -top-1 rounded-full bg-accent px-1 text-[9px] font-semibold leading-3.5 text-accent-ink" aria-label={`${due} due for review`}>
+                  {due}
+                </span>
+              )}
+            </span>
             <span className="max-w-full truncate px-0.5">{n.label.replace('Scenario Lab', 'Scenarios')}</span>
           </NavLink>
         ))}

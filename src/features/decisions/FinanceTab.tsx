@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Badge, Card, InfoTip, Notice, Select } from '@/ui/components';
-import { AssumptionsEditor } from '../scenarios/AssumptionsEditor';
+import { AssumptionsEditor, GoalDateBadge } from '../scenarios/AssumptionsEditor';
 import { ProjectionChart } from '../scenarios/ProjectionChart';
 import { Tornado } from '../scenarios/Tornado';
 import { MonteCarloPanel } from '../scenarios/MonteCarloPanel';
@@ -133,6 +133,7 @@ export function FinanceTab({ decision: d, onChange, flex }: { decision: Decision
                             ) : (
                               <Badge>Target not reached</Badge>
                             ))}
+                          <GoalDateBadge result={c.result} assumptions={d.assumptions} />
                         </td>
                       </tr>
                     );

@@ -1,4 +1,8 @@
-import { Field, InfoTip, Input, MoneyInput, NumberInput, PercentInput, Select } from '@/ui/components';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { Badge, Field, InfoTip, Input, MoneyInput, NumberInput, PercentInput, Select } from '@/ui/components';
+import { db } from '@/data/db';
+import { reachedByDate, type ProjectionResult } from '@/engine/projection';
+import { formatDate } from '@/domain/dates';
 import type { ProjectionAssumptions } from '@/domain/types';
 
 export function AssumptionsEditor({ value, onChange, idPrefix, disabled }: {
@@ -8,6 +12,7 @@ export function AssumptionsEditor({ value, onChange, idPrefix, disabled }: {
   disabled?: boolean;
 }) {
   const set = (patch: Partial<ProjectionAssumptions>) => onChange({ ...value, ...patch });
+  const goals = useLiveQuery(() => db.goals.toArray(), []);
   const id = (s: string) => `${idPrefix}-${s}`;
   return (
     <fieldset disabled={disabled} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -55,9 +60,38 @@ export function AssumptionsEditor({ value, onChange, idPrefix, disabled }: {
           <option value="start">Start of month (before growth)</option>
         </Select>
       </Field>
-      <Field label="Savings target (optional)" htmlFor={id('target')}>
-        <MoneyInput id={id('target')} value={value.targetAmount ?? null} onChange={(v) => set({ targetAmount: v ?? undefined })} />
+      <Field label="Savings target (optional)" htmlFor={id('target')} hint={value.goalId ? 'Taken from a goal' : undefined}>
+        <MoneyInput id={id('target')} value={value.targetAmount ?? null} onChange={(v) => set({ targetAmount: v ?? undefined, goalId: undefined })} />
       </Field>
+      {goals && goals.length > 0 && (
+        <Field label="…or use a goal" htmlFor={id('goal')}>
+          <Select
+            id={id('goal')}
+            value={value.goalId ?? ''}
+            onChange={(e) => {
+              const g = goals.find((x) => x.id === e.target.value);
+              set(g ? { goalId: g.id, targetAmount: g.targetAmount } : { goalId: undefined });
+            }}
+          >
+            <option value="">No goal</option>
+            {goals.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+                {g.targetDate ? ` (by ${formatDate(g.targetDate)})` : ''}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
     </fieldset>
   );
+}
+
+/** Badge stating whether a projection reaches its goal by the goal's target date. */
+export function GoalDateBadge({ result, assumptions }: { result: ProjectionResult; assumptions: ProjectionAssumptions }) {
+  const goal = useLiveQuery(async () => (assumptions.goalId ? db.goals.get(assumptions.goalId) : undefined), [assumptions.goalId]);
+  if (!goal?.targetDate) return null;
+  const ok = reachedByDate(result, assumptions, goal.targetDate);
+  if (ok === null) return <Badge>Goal date beyond horizon</Badge>;
+  return ok ? <Badge tone="good">Reaches “{goal.name}” by {formatDate(goal.targetDate)}</Badge> : <Badge tone="warn">Misses “{goal.name}” date</Badge>;
 }

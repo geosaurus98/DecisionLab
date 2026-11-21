@@ -24,4 +24,6 @@ export const DEFINITIONS = {
     'The standard deviation of annual returns: how much a typical year differs from the average. Roughly, two years in three fall within ±1 volatility of the expected return. Diversified growth funds have historically been around 10–15%; cash under 1%.',
   mcDifference:
     'For each simulated path, both alternatives experience the same market returns, so the difference isolates the effect of the decision itself. Percentiles are taken across paths.',
+  budget:
+    'Your planned monthly spending per category (entered by you). Actual spending is net of refunds and counts split parts in their own categories. In the current month, “ahead of pace” means spending is more than 10% above an even spread across the month.',
 } as const;

@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Badge, Button, ConfirmButton, EmptyState, Notice, PageHeader, Spinner, Tabs } from '@/ui/components';
 import { db } from '@/data/db';
-import { blankDecision, deleteDecision, duplicateDecision, saveDecision, validateDecision } from '@/data/decisions';
+import { blankDecision, deleteDecision, duplicateDecision, saveDecision, scenarioFromDecision, validateDecision } from '@/data/decisions';
 import { getDefaultAssumptions, getProfile } from '@/data/settings';
 import type { Decision } from '@/domain/types';
 import { useAnalytics, useFlexibility } from '@/hooks/useAppData';
@@ -113,6 +113,15 @@ export function DecisionPage() {
         actions={
           <>
             <Button onClick={() => navigate('/decisions')}>Back</Button>
+            <Button
+              onClick={async () => {
+                const set = scenarioFromDecision(draft);
+                await db.scenarioSets.add(set);
+                navigate(`/scenarios?set=${set.id}`);
+              }}
+            >
+              Open in Scenario Lab
+            </Button>
             <Button
               onClick={async () => {
                 const copy = duplicateDecision(draft);

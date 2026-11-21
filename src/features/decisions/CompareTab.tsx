@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Badge, Card, EmptyState, InfoTip, Notice } from '@/ui/components';
-import { SERIES } from '@/ui/charts';
+import { ChartWithTable, SERIES, SimpleTable, axisProps, moneyTick } from '@/ui/charts';
+import { CartesianGrid, LabelList, Line, ComposedChart, ResponsiveContainer, Scatter, Tooltip, XAxis, YAxis } from 'recharts';
 import type { Decision } from '@/domain/types';
 import { FRAGILE_MARGIN, FRAGILE_WEIGHT_SHIFT, paretoEfficient, scoreOptions, weightSensitivity } from '@/engine/scoring';
 import { totalOptionCost } from '@/engine/projection';
@@ -10,11 +11,22 @@ import { DEFINITIONS } from '@/ui/definitions';
 export function CompareTab({ decision: d }: { decision: Decision; onChange: (d: Decision) => void }) {
   const scoring = useMemo(() => scoreOptions(d.options, d.criteria, d.scores), [d.options, d.criteria, d.scores]);
   const sens = useMemo(() => weightSensitivity(d.options, d.criteria, d.scores), [d.options, d.criteria, d.scores]);
-  const costs = useMemo(() => new Map(d.options.map((o) => [o.id, totalOptionCost(o, d.assumptions.horizonMonths, d.assumptions.annualInflation)])), [d.options, d.assumptions.horizonMonths]);
+  const costs = useMemo(() => new Map(d.options.map((o) => [o.id, totalOptionCost(o, d.assumptions.horizonMonths, d.assumptions.annualInflation)])), [d.options, d.assumptions.horizonMonths, d.assumptions.annualInflation]);
   const pareto = useMemo(
     () => paretoEfficient(scoring.results.map((r) => ({ optionId: r.optionId, score: r.score, cost: costs.get(r.optionId) ?? 0 }))),
     [scoring, costs],
   );
+  const points = useMemo(
+    () =>
+      scoring.results.map((r) => ({
+        name: d.options.find((o) => o.id === r.optionId)?.name ?? '',
+        cost: costs.get(r.optionId) ?? 0,
+        score: r.score,
+        efficient: pareto.has(r.optionId),
+      })),
+    [scoring, costs, pareto, d.options],
+  );
+  const frontier = useMemo(() => points.filter((p) => p.efficient).sort((a, b) => a.cost - b.cost), [points]);
   const optName = (id: string | null) => d.options.find((o) => o.id === id)?.name ?? '—';
   const critName = (id: string) => d.criteria.find((c) => c.id === id)?.name || 'unnamed';
 
@@ -91,6 +103,49 @@ export function CompareTab({ decision: d }: { decision: Decision; onChange: (d: 
           {w}
         </Notice>
       ))}
+
+      <Card
+        title="Cost versus preference"
+        description="Each alternative’s preference score against its total cost over the horizon. The line joins efficient alternatives: moving along it, more preference costs more money. Dominated alternatives sit below/right of it."
+      >
+        <ChartWithTable
+          label="Cost versus preference"
+          height={280}
+          chart={
+            <ResponsiveContainer>
+              <ComposedChart margin={{ top: 16, right: 24, left: 0, bottom: 8 }}>
+                <CartesianGrid />
+                <XAxis type="number" dataKey="cost" name="Total cost" tickFormatter={moneyTick} domain={['auto', 'auto']} padding={{ left: 40, right: 40 }} {...axisProps} />
+                <YAxis type="number" dataKey="score" name="Preference" domain={[0, 100]} width={40} {...axisProps} />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    const p = payload?.[0]?.payload as { name: string; cost: number; score: number; efficient: boolean } | undefined;
+                    if (!active || !p?.name) return null;
+                    return (
+                      <div className="rounded-lg border border-border bg-surface px-3 py-2 text-xs shadow-lg">
+                        <p className="font-semibold">{p.name}</p>
+                        <p>Total cost {formatMoney(p.cost, { whole: true })}</p>
+                        <p>Preference {p.score.toFixed(1)}/100 · {p.efficient ? 'efficient' : 'dominated'}</p>
+                      </div>
+                    );
+                  }}
+                />
+                <Line data={frontier} dataKey="score" stroke="var(--ink-2)" strokeDasharray="4 4" dot={false} isAnimationActive={false} legendType="none" />
+                <Scatter data={points} fill={SERIES[0]} isAnimationActive={false}>
+                  <LabelList dataKey="name" position="top" style={{ fill: 'var(--ink-2)', fontSize: 12 }} />
+                </Scatter>
+              </ComposedChart>
+            </ResponsiveContainer>
+          }
+          table={
+            <SimpleTable
+              headers={['Alternative', 'Total cost', 'Preference', 'Status']}
+              align={['left', 'right', 'right', 'left']}
+              rows={points.map((p) => [p.name, formatMoney(p.cost, { whole: true }), p.score.toFixed(1), p.efficient ? 'Efficient' : 'Dominated'])}
+            />
+          }
+        />
+      </Card>
 
       <Card title="How the score is calculated" description="Every number below can be traced: normalised score × normalised weight = points.">
         <div className="overflow-x-auto">

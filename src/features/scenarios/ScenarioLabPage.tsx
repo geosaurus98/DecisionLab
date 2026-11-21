@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { decisionFromScenario, saveDecision } from '@/data/decisions';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Badge, Button, Card, Checkbox, ConfirmButton, EmptyState, Field, Input, MoneyInput, Notice, NumberInput, PageHeader, Select, Spinner } from '@/ui/components';
 import { db } from '@/data/db';
@@ -9,7 +11,7 @@ import { finalRealMetric, realDifferenceMetric, tornado } from '@/engine/sensiti
 import { formatMoney } from '@/domain/money';
 import { addMonths, formatMonth } from '@/domain/dates';
 import { newId, nowTimestamp } from '@/domain/ids';
-import { AssumptionsEditor } from './AssumptionsEditor';
+import { AssumptionsEditor, GoalDateBadge } from './AssumptionsEditor';
 import { ProjectionChart } from './ProjectionChart';
 import { Tornado } from './Tornado';
 import { TEMPLATES, newScenarioSet } from './templates';
@@ -17,7 +19,9 @@ import { MonteCarloPanel } from './MonteCarloPanel';
 
 export function ScenarioLabPage() {
   const sets = useLiveQuery(() => db.scenarioSets.orderBy('updatedAt').reverse().toArray(), []);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const [activeId, setActiveId] = useState<string | null>(params.get('set'));
   const [draft, setDraft] = useState<ScenarioSet | null>(null);
 
   useEffect(() => {
@@ -79,6 +83,16 @@ export function ScenarioLabPage() {
             <Field label="Name" htmlFor="scn-name" className="w-64">
               <Input id="scn-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
             </Field>
+            <Button
+              variant="primary"
+              onClick={async () => {
+                const d = decisionFromScenario(draft);
+                await saveDecision(d);
+                navigate(`/decisions/${d.id}`);
+              }}
+            >
+              Create a decision from this
+            </Button>
             <ConfirmButton
               title="Delete scenario?"
               confirmText="This permanently deletes the scenario."
@@ -221,6 +235,7 @@ function ScenarioEditor({ set, onChange }: { set: ScenarioSet; onChange: (s: Sce
                         {set.base.targetAmount !== undefined && c.result.targetReachedAt !== null && (
                           <Badge tone="good">Target {formatMonth(addMonths(set.base.startMonth, c.result.targetReachedAt), true)}</Badge>
                         )}
+                        <GoalDateBadge result={c.result} assumptions={set.base} />
                       </td>
                     </tr>
                   ))}

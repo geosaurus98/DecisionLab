@@ -45,7 +45,23 @@ export function FlexibilityPanel({ estimate, compact }: { estimate: FlexibilityE
           Monthly discretionary capacity <InfoTip>{DEFINITIONS.monthlyCapacity}</InfoTip>
         </h3>
         {estimate.monthlyLines.length > 0 ? (
-          <Lines lines={estimate.monthlyLines} total={estimate.monthlyCapacity} totalLabel="Per month" />
+          <>
+            <Lines lines={estimate.monthlyLines} total={estimate.monthlyCapacity} totalLabel="Per month" />
+            {estimate.budgetedDiscretionary !== null && (
+              <dl className="mt-2 grid gap-1 rounded-lg bg-surface-2 p-2 text-sm">
+                <div className="flex justify-between gap-2">
+                  <dt>Planned in discretionary budgets</dt>
+                  <dd className="tabular">{formatMoney(estimate.budgetedDiscretionary)}</dd>
+                </div>
+                {estimate.unallocatedCapacity !== null && (
+                  <div className="flex justify-between gap-2 font-semibold">
+                    <dt>Not yet allocated</dt>
+                    <dd className={cx('tabular', estimate.unallocatedCapacity < 0 && 'text-bad')}>{formatMoney(estimate.unallocatedCapacity)}</dd>
+                  </div>
+                )}
+              </dl>
+            )}
+          </>
         ) : (
           <p className="text-sm text-ink-2">Import at least one complete month of transactions.</p>
         )}

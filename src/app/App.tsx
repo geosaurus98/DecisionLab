@@ -2,6 +2,7 @@ import { Component, Suspense, lazy, useEffect, useState, type ComponentType, typ
 import { createHashRouter, RouterProvider } from 'react-router-dom';
 import { AppShell } from './AppShell';
 import { ensureSeeded } from '@/data/init';
+import { maybeNotifyDueReviews } from '@/data/reminders';
 import { ToastProvider } from '@/ui/toast';
 import { Button, Notice, Spinner } from '@/ui/components';
 import { useTheme } from '@/ui/theme';
@@ -77,7 +78,10 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     ensureSeeded()
-      .then(() => setReady(true))
+      .then(() => {
+        setReady(true);
+        maybeNotifyDueReviews().catch(() => {});
+      })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
     // Ask the browser not to evict our IndexedDB data under storage pressure.
     navigator.storage?.persist?.().catch(() => {});

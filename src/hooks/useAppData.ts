@@ -93,12 +93,28 @@ export function useAnalytics(): Analytics {
   }, [transactions, categories, dismissed, today]);
 }
 
+export function useBudgets() {
+  return useLiveQuery(() => db.budgets.toArray(), []);
+}
+
+/** Number of decided/completed decisions whose review date has arrived. */
+export function useDueReviewCount(): number {
+  const today = todayIso();
+  return (
+    useLiveQuery(
+      () => db.decisions.where('reviewDate').belowOrEqual(today).filter((d) => d.status === 'decided' || d.status === 'completed').count(),
+      [today],
+    ) ?? 0
+  );
+}
+
 export function useFlexibility(analytics: Analytics): FlexibilityEstimate | undefined {
   const accounts = useAccounts();
   const goals = useLiveQuery(() => db.goals.toArray(), []);
   const profile = useProfile();
+  const budgets = useBudgets();
   return useMemo(() => {
-    if (!accounts || !goals || !profile || analytics.loading) return undefined;
+    if (!accounts || !goals || !profile || !budgets || analytics.loading) return undefined;
     return estimateFlexibility({
       accounts,
       goals,
@@ -107,8 +123,9 @@ export function useFlexibility(analytics: Analytics): FlexibilityEstimate | unde
       recurring: analytics.recurring,
       categories: analytics.categoryMap,
       today: analytics.today,
+      budgets,
     });
-  }, [accounts, goals, profile, analytics]);
+  }, [accounts, goals, profile, budgets, analytics]);
 }
 
 export function useHasDemo(): boolean {

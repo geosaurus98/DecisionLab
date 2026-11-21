@@ -462,6 +462,7 @@ export function Modal({ open, onClose, title, children, footer, wide }: {
   wide?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
@@ -476,7 +477,7 @@ export function Modal({ open, onClose, title, children, footer, wide }: {
         e.preventDefault();
         onClose();
       }}
-      aria-labelledby="modal-title"
+      aria-labelledby={titleId}
       className={cx(
         'm-auto max-h-[92vh] w-[calc(100%-1.5rem)] overflow-hidden rounded-xl border border-border bg-surface p-0 text-ink shadow-2xl',
         wide ? 'max-w-5xl' : 'max-w-lg',
@@ -485,7 +486,7 @@ export function Modal({ open, onClose, title, children, footer, wide }: {
       {open && (
         <div className="flex max-h-[92vh] flex-col">
           <header className="flex items-center justify-between border-b border-border px-5 py-3">
-            <h2 id="modal-title" className="text-base font-semibold">
+            <h2 id={titleId} className="text-base font-semibold">
               {title}
             </h2>
             <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close">
