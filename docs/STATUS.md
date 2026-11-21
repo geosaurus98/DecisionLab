@@ -83,7 +83,7 @@ Not started beyond anomalies and basic calibration. See [BACKLOG.md](BACKLOG.md)
 
 ## Known limitations
 
-- Tax model is a flat rate on positive gains (PIE approximation).
+- Tax model is a flat rate on monthly returns with loss credits (PIE approximation).
 - Multi-currency is not supported (NZD only).
 - Large datasets (> ~50k transactions) are untested for UI performance.
 - Recurring detection uses merchant keys; merchants whose description changes every month may be missed.

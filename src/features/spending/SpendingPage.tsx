@@ -27,13 +27,13 @@ export function SpendingPage() {
   }, [a.completeMonths, period]);
   const range = months.length ? { start: firstDayOfMonth(months[0]!.month), end: lastDayOfMonth(months.at(-1)!.month) } : undefined;
 
-  const totals = useMemo(() => (range ? summarise(a.transactions, a.categoryMap, range) : undefined), [a.transactions, a.categoryMap, range?.start, range?.end]);
-  const byCategory = useMemo(() => (range ? spendingByCategory(a.transactions, a.categoryMap, range) : []), [a.transactions, a.categoryMap, range?.start, range?.end]);
+  const totals = useMemo(() => (range ? summarise(a.lines, a.categoryMap, range) : undefined), [a.lines, a.categoryMap, range?.start, range?.end]);
+  const byCategory = useMemo(() => (range ? spendingByCategory(a.lines, a.categoryMap, range) : []), [a.lines, a.categoryMap, range?.start, range?.end]);
 
   // Trend: top 6 categories by total, the rest folded into "Other categories".
   const trend = useMemo(() => {
     const top = byCategory.slice(0, 6).map((c) => c.categoryId ?? 'uncategorised');
-    const rows = categoryTrend(a.transactions, a.categoryMap, months.map((m) => m.month));
+    const rows = categoryTrend(a.lines, a.categoryMap, months.map((m) => m.month));
     return {
       keys: top,
       data: rows.map((r) => {
@@ -47,20 +47,20 @@ export function SpendingPage() {
         return row;
       }),
     };
-  }, [byCategory, a.transactions, a.categoryMap, months]);
+  }, [byCategory, a.lines, a.categoryMap, months]);
 
   const target = compareMonth || a.lastComplete;
   const comparison = useMemo(() => {
     const baselineStart = addMonths(target, -3);
     return comparePeriods(
-      a.transactions,
+      a.lines,
       a.categoryMap,
       { start: firstDayOfMonth(baselineStart), end: lastDayOfMonth(addMonths(target, -1)) },
       { start: firstDayOfMonth(target), end: lastDayOfMonth(target) },
     );
-  }, [a.transactions, a.categoryMap, target]);
+  }, [a.lines, a.categoryMap, target]);
 
-  const anomalies = useMemo(() => findAnomalies(a.transactions, a.categoryMap, { since: range?.start }), [a.transactions, a.categoryMap, range?.start]);
+  const anomalies = useMemo(() => findAnomalies(a.lines, a.categoryMap, { since: range?.start }), [a.lines, a.categoryMap, range?.start]);
   const txnById = useMemo(() => new Map(a.transactions.map((t) => [t.id, t])), [a.transactions]);
   const catName = (id: string | null) => (id === null || id === 'uncategorised' ? 'Uncategorised' : a.categoryMap.get(id)?.name ?? 'Unknown');
 
@@ -326,7 +326,7 @@ export function SpendingPage() {
             headers={['Date', 'Description', 'Category', 'Amount', 'Typical in category']}
             align={['left', 'left', 'left', 'right', 'right']}
             rows={anomalies.slice(0, 10).map((x) => {
-              const t = txnById.get(x.id)!;
+              const t = txnById.get(x.id.split(':')[0]!)!;
               return [formatDate(t.date), merchantLabel(t.merchant), catName(x.categoryId), formatMoney(x.amount), `${formatMoney(x.typical)} (n=${x.sampleSize})`];
             })}
           />

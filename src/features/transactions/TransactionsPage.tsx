@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Badge, Button, CategoryDot, Checkbox, ConfirmButton, EmptyState, Field, Input, Modal, Notice, PageHeader, Select, Spinner, Tabs, Textarea, cx } from '@/ui/components';
+import { Badge, Button, CategoryDot, Checkbox, ConfirmButton, EmptyState, Input, Notice, PageHeader, Select, Spinner, Tabs, cx } from '@/ui/components';
+import { AddTransactionModal, TransactionDetail } from './TransactionEditors';
+import { hasCategory } from '@/engine/splits';
 import { useAccounts, useAnalytics } from '@/hooks/useAppData';
 import { db } from '@/data/db';
-import { setTransactionCategory, updateTransactionNotes } from '@/data/transactions';
+import { setTransactionCategory } from '@/data/transactions';
 import { undoImport } from '@/data/imports';
 import { loadDemoData } from '@/data/demo/load';
 import { formatDate } from '@/domain/dates';
@@ -67,7 +69,8 @@ export function TransactionsPage() {
   const [to, setTo] = useState('');
   const [limit, setLimit] = useState(PAGE);
   const [remember, setRemember] = useState(true);
-  const [selected, setSelected] = useState<Transaction | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   const accountName = useMemo(() => new Map((accounts ?? []).map((a) => [a.id, a.name])), [accounts]);
   const filtered = useMemo(() => {
@@ -76,7 +79,7 @@ export function TransactionsPage() {
       (t) =>
         (!q || t.description.toLowerCase().includes(q) || t.notes?.toLowerCase().includes(q) || (t.amount / 100).toFixed(2).includes(q)) &&
         (!accountFilter || t.accountId === accountFilter) &&
-        (!categoryFilter || (categoryFilter === '__none' ? t.categoryId === null : t.categoryId === categoryFilter)) &&
+        (!categoryFilter || hasCategory(t, categoryFilter === '__none' ? null : categoryFilter)) &&
         (!direction || (direction === 'in' ? t.amount > 0 : t.amount < 0)) &&
         (!from || t.date >= from) &&
         (!to || t.date <= to),
@@ -84,6 +87,7 @@ export function TransactionsPage() {
   }, [analytics.transactions, search, accountFilter, categoryFilter, direction, from, to]);
 
   const transferPairs = useMemo(() => findTransferPairs(analytics.transactions, analytics.categoryMap), [analytics.transactions, analytics.categoryMap]);
+  const selectedTxn = selectedId ? analytics.transactions.find((t) => t.id === selectedId) ?? null : null;
   const uncategorisedCount = analytics.transactions.filter((t) => t.categoryId === null).length;
   const total = filtered.reduce((a, t) => a + t.amount, 0);
 
@@ -120,6 +124,7 @@ export function TransactionsPage() {
         actions={
           <>
             {analytics.transactions.length > 0 && <Button onClick={exportFiltered}>Export CSV</Button>}
+            {(accounts?.length ?? 0) > 0 && <Button onClick={() => setAddOpen(true)}>Add transaction</Button>}
             <Button variant="primary" onClick={() => setImportOpen(true)}>
               Import CSV
             </Button>
@@ -127,6 +132,7 @@ export function TransactionsPage() {
         }
       />
       <ImportWizard open={importOpen} onClose={() => setImportOpen(false)} />
+      <AddTransactionModal open={addOpen} onClose={() => setAddOpen(false)} categories={analytics.categories} />
       <Tabs
         value={tab}
         onChange={setTab}
@@ -235,7 +241,7 @@ export function TransactionsPage() {
                       <tr key={t.id} className="border-b border-border/60 last:border-0 hover:bg-surface-2/60">
                         <td className="whitespace-nowrap px-3 py-1.5 text-ink-2 tabular">{formatDate(t.date)}</td>
                         <td className="px-3 py-1.5">
-                          <button className="text-left hover:underline" onClick={() => setSelected(t)}>
+                          <button className="text-left hover:underline" onClick={() => setSelectedId(t.id)}>
                             <span className="font-medium text-ink">{merchantLabel(t.merchant)}</span>
                             <span className="block max-w-[28rem] truncate text-xs text-muted">
                               {accountName.get(t.accountId)} · {t.description}
@@ -246,14 +252,22 @@ export function TransactionsPage() {
                         <td className="px-3 py-1.5">
                           <div className="flex items-center gap-2">
                             <CategoryDot color={cat?.color} />
-                            <CategorySelect
-                              ariaLabel={`Category for ${t.description}`}
-                              categories={analytics.categories}
-                              value={t.categoryId}
-                              onChange={(id) => changeCategory(t, id)}
-                              className={cx('h-8 w-44 text-xs', !t.categoryId && 'border-warn')}
-                            />
-                            {t.categorySource !== 'none' && (
+                            {t.splits?.length ? (
+                              <button className="h-8 w-44 rounded-lg border border-dashed border-border px-2 text-left text-xs text-ink-2 hover:border-accent" onClick={() => setSelectedId(t.id)}>
+                                Split · {t.splits.length} categories
+                              </button>
+                            ) : (
+                              <CategorySelect
+                                ariaLabel={`Category for ${t.description}`}
+                                categories={analytics.categories}
+                                value={t.categoryId}
+                                onChange={(id) => changeCategory(t, id)}
+                                className={cx('h-8 w-44 text-xs', !t.categoryId && 'border-warn')}
+                              />
+                            )}
+                            {t.decisionId && <Badge tone="accent" title="Linked to a decision">Decision</Badge>}
+                            {t.importId === null && <Badge title="Entered manually">Manual</Badge>}
+                            {t.categorySource !== 'none' && !t.splits?.length && (
                               <span className="hidden text-[10px] uppercase tracking-wide text-muted xl:inline" title="How this category was assigned">
                                 {t.categorySource}
                               </span>
@@ -281,7 +295,9 @@ export function TransactionsPage() {
       {tab === 'imports' && <ImportHistory accountName={accountName} />}
       {tab === 'rules' && <RulesPanel />}
 
-      <TransactionDetail txn={selected} onClose={() => setSelected(null)} accountName={selected ? accountName.get(selected.accountId) : undefined} />
+      {selectedTxn && (
+        <TransactionDetail txn={selectedTxn} onClose={() => setSelectedId(null)} accountName={accountName.get(selectedTxn.accountId)} categories={analytics.categories} />
+      )}
     </div>
   );
 }
@@ -338,75 +354,5 @@ function ImportHistory({ accountName }: { accountName: Map<string, string> }) {
         </tbody>
       </table>
     </div>
-  );
-}
-
-function TransactionDetail({ txn, onClose, accountName }: { txn: Transaction | null; onClose: () => void; accountName?: string }) {
-  const [notes, setNotes] = useState('');
-  const [lastId, setLastId] = useState<string | null>(null);
-  const toast = useToast();
-  const rule = useLiveQuery(async () => (txn?.ruleId ? db.rules.get(txn.ruleId) : undefined), [txn?.ruleId]);
-  if (txn && txn.id !== lastId) {
-    setLastId(txn.id);
-    setNotes(txn.notes ?? '');
-  }
-  return (
-    <Modal
-      open={!!txn}
-      onClose={onClose}
-      title="Transaction details"
-      footer={
-        <>
-          <Button onClick={onClose}>Close</Button>
-          <Button
-            variant="primary"
-            onClick={async () => {
-              if (txn) await updateTransactionNotes(txn.id, notes);
-              toast({ message: 'Notes saved.', tone: 'good' });
-              onClose();
-            }}
-          >
-            Save notes
-          </Button>
-        </>
-      }
-    >
-      {txn && (
-        <div className="grid gap-4 text-sm">
-          <dl className="grid grid-cols-[8rem_1fr] gap-y-1.5">
-            <dt className="text-muted">Date</dt>
-            <dd>{formatDate(txn.date)}</dd>
-            <dt className="text-muted">Amount</dt>
-            <dd className="tabular">{formatMoney(txn.amount)}</dd>
-            <dt className="text-muted">Account</dt>
-            <dd>{accountName}</dd>
-            <dt className="text-muted">Description</dt>
-            <dd>{txn.description}</dd>
-            <dt className="text-muted">Merchant key</dt>
-            <dd className="font-mono text-xs">{txn.merchant}</dd>
-            <dt className="text-muted">Categorised by</dt>
-            <dd>
-              {txn.categorySource === 'rule' ? `Rule “${rule?.name ?? 'deleted rule'}”` : txn.categorySource === 'memory' ? 'Your earlier correction for this merchant' : txn.categorySource === 'manual' ? 'You (manual)' : 'Not categorised'}
-            </dd>
-          </dl>
-          <Field label="Notes" htmlFor="txn-notes">
-            <Textarea id="txn-notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} />
-          </Field>
-          {txn.original && (
-            <details>
-              <summary className="cursor-pointer text-ink-2">Original imported values (audit)</summary>
-              <dl className="mt-2 grid grid-cols-[8rem_1fr] gap-y-1 font-mono text-xs">
-                {Object.entries(txn.original).map(([k, v]) => (
-                  <div key={k} className="contents">
-                    <dt className="text-muted">{k}</dt>
-                    <dd>{v || '—'}</dd>
-                  </div>
-                ))}
-              </dl>
-            </details>
-          )}
-        </div>
-      )}
-    </Modal>
   );
 }

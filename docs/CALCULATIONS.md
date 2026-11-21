@@ -74,12 +74,12 @@ Monthly time step; month 0 = `startMonth`; balances are reported at the **end** 
 
 - Monthly return: r_m = (1 + r_annual)^(1/12) − 1 (geometric, so 12 months compound exactly to the annual rate).
 - Monthly fee: f_m = 1 − (1 − fee_annual)^(1/12), applied to the balance.
-- Each month, with timing **start**: (1) apply cash flows; (2) gain = max(B,0)·r_m; (3) tax = max(gain,0)·tax rate; (4) fee = max(B,0)·f_m. With timing **end**, cash flows are applied after steps 2–4 (ordinary annuity).
+- Each month, with timing **start**: (1) apply cash flows; (2) gain = max(B,0)·r_m; (3) tax = gain·tax rate (a negative return produces a tax credit); (4) fee = max(B,0)·f_m. With timing **end**, cash flows are applied after steps 2–4 (ordinary annuity).
 - Cash flows = monthly contribution (+ variant contribution change) + recurring flows active in that month + one-offs in that month. Inflation-indexed recurring flows grow at the monthly inflation rate from their start.
 - Negative balances earn nothing and pay no fee (no borrowing cost is modelled); months ending negative are flagged as **shortfalls**.
 - **Real values** (today's dollars) = nominal / (1 + inflation)^((t + 1)/12), i.e. deflated to the start of month 0.
 - Values are computed in fractional cents and rounded only in outputs. Identity: final = initial + flows + growth − tax − fees (± rounding).
-- **Tax** is a simplification: a flat rate on positive monthly gains (approximates NZ PIE taxation at your PIR; does not model FIF, losses carried forward or KiwiSaver specifics). Set 0% for pre-tax results.
+- **Tax** is a simplification: a flat rate on each month's return, with losses producing a credit (approximates NZ PIE taxation at your PIR, where fund losses generate tax credits; does not model FIF rules or KiwiSaver specifics). Taxing only gains would create an artificial drag under volatile returns. Set 0% for pre-tax results.
 - Validated against the closed-form future value of an annuity in tests (start and end timing).
 
 **Decision alternatives → cash flows**: upfront cost becomes a one-off of −cost in `costMonth`; monthly cost becomes a recurring flow of −cost from `costMonth` for `monthlyCostMonths` (or to the horizon). **Total cost** = undiscounted sum within the horizon.

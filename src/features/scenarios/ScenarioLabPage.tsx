@@ -13,6 +13,7 @@ import { AssumptionsEditor } from './AssumptionsEditor';
 import { ProjectionChart } from './ProjectionChart';
 import { Tornado } from './Tornado';
 import { TEMPLATES, newScenarioSet } from './templates';
+import { MonteCarloPanel } from './MonteCarloPanel';
 
 export function ScenarioLabPage() {
   const sets = useLiveQuery(() => db.scenarioSets.orderBy('updatedAt').reverse().toArray(), []);
@@ -244,6 +245,9 @@ function ScenarioEditor({ set, onChange }: { set: ScenarioSet; onChange: (s: Sce
             }
           >
             <Tornado drivers={drivers} valueLabel={other ? 'difference in final balance, today’s dollars' : 'final balance, today’s dollars'} />
+          </Card>
+          <Card title="Uncertainty" description="How wide the range of outcomes could be when returns vary from year to year.">
+            <MonteCarloPanel idPrefix="scn-mc" assumptions={set.base} variants={set.variants} config={set.monteCarlo} onChange={(monteCarlo) => onChange({ ...set, monteCarlo })} />
           </Card>
         </>
       )}

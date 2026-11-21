@@ -221,8 +221,11 @@ export function Metric({ label, value, definition, sub, provenance, tone }: {
 
 // ───────── Form controls ─────────
 
+/** Inputs are full width unless the caller sets its own width class (w-…). */
+const widthFor = (className?: string) => (className && /(^|\s)(\w+:)?w-/.test(className) ? '' : 'w-full');
+
 const inputBase =
-  'w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink placeholder:text-muted focus:border-accent disabled:opacity-60';
+  'rounded-lg border border-border bg-surface px-3 text-sm text-ink placeholder:text-muted focus:border-accent disabled:opacity-60';
 
 export function Field({ label, hint, error, children, htmlFor, className }: {
   label: ReactNode;
@@ -249,19 +252,19 @@ export function Field({ label, hint, error, children, htmlFor, className }: {
 }
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input({ className, ...rest }, ref) {
-  return <input ref={ref} className={cx(inputBase, 'h-10', className)} {...rest} />;
+  return <input ref={ref} className={cx(inputBase, widthFor(className), 'h-10', className)} {...rest} />;
 });
 
 export function Select({ className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select className={cx(inputBase, 'h-10 pr-8', className)} {...rest}>
+    <select className={cx(inputBase, widthFor(className), 'h-10 pr-8', className)} {...rest}>
       {children}
     </select>
   );
 }
 
 export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={cx(inputBase, 'min-h-[76px] py-2', className)} {...rest} />;
+  return <textarea className={cx(inputBase, widthFor(className), 'min-h-[76px] py-2', className)} {...rest} />;
 }
 
 export function Checkbox({ label, checked, onChange, id, hint }: { label: ReactNode; checked: boolean; onChange: (v: boolean) => void; id?: string; hint?: ReactNode }) {
@@ -310,7 +313,7 @@ export function MoneyInput({ value, onChange, id, allowNegative = false, ariaLab
         aria-invalid={invalid}
         inputMode="decimal"
         placeholder={placeholder ?? '0'}
-        className={cx(inputBase, 'h-10 pl-6 tabular', invalid && 'border-bad')}
+        className={cx(inputBase, 'h-10 w-full pl-6 tabular', invalid && 'border-bad')}
         value={text}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
@@ -350,7 +353,7 @@ export function PercentInput({ value, onChange, id, ariaLabel, min = -100, max =
         min={min}
         max={max}
         step={step}
-        className={cx(inputBase, 'h-10 pr-7 tabular')}
+        className={cx(inputBase, 'h-10 w-full pr-7 tabular')}
         value={text}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
@@ -386,7 +389,7 @@ export function NumberInput({ value, onChange, min, max, step = 1, id, ariaLabel
       min={min}
       max={max}
       step={step}
-      className={cx(inputBase, 'h-10 tabular', className)}
+      className={cx(inputBase, widthFor(className), 'h-10 tabular', className)}
       value={value ?? ''}
       onChange={(e) => {
         if (e.target.value === '') return onChange(null);

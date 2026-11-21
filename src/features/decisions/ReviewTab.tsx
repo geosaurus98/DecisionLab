@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Badge, Button, Card, EmptyState, Field, MoneyInput, Select, Textarea } from '@/ui/components';
+import { Badge, Button, Card, EmptyState, Field, MoneyInput, ProvenanceBadge, Select, Textarea } from '@/ui/components';
+import { LinkedTransactions, useLinkedTransactions } from './LinkedTransactions';
+import { linkedCost } from '@/engine/decisionLink';
 import type { Decision, OutcomeReview } from '@/domain/types';
 import { saveReview } from '@/data/decisions';
 import { formatMoney, formatPercent } from '@/domain/money';
@@ -11,10 +13,13 @@ import { SnapshotView } from './DecideTab';
 export function ReviewTab({ decision: d, onReplace }: { decision: Decision; onReplace: (d: Decision) => void }) {
   const toast = useToast();
   const [editing, setEditing] = useState(!d.review);
+  const linked = useLinkedTransactions(d.id);
+  const linkedTotal = linked && linked.length > 0 ? linkedCost(linked) : null;
   const [form, setForm] = useState<OutcomeReview>(
     d.review ?? {
       reviewedAt: '',
-      actualCost: d.snapshot?.predictedCost ?? null,
+      actualCost: null,
+      actualCostSource: 'manual',
       actualBenefits: '',
       satisfaction: 7,
       expectationsMet: 'met',
@@ -23,6 +28,7 @@ export function ReviewTab({ decision: d, onReplace }: { decision: Decision; onRe
       lessons: '',
     },
   );
+  // Hooks above must run unconditionally.
   if (!d.snapshot) {
     return <EmptyState title="No choice recorded yet">Record your choice in the Decide tab first. You can then come back to review how it turned out.</EmptyState>;
   }
@@ -47,7 +53,10 @@ export function ReviewTab({ decision: d, onReplace }: { decision: Decision; onRe
               <tr className="border-b border-border/60">
                 <td className="px-2 py-1.5">Cost</td>
                 <td className="px-2 py-1.5 text-right tabular">{formatMoney(s.predictedCost)}</td>
-                <td className="px-2 py-1.5 text-right tabular">{r.actualCost === null ? '—' : formatMoney(r.actualCost)}</td>
+                <td className="px-2 py-1.5 text-right tabular">
+                  {r.actualCost === null ? '—' : formatMoney(r.actualCost)}{' '}
+                  {r.actualCost !== null && <ProvenanceBadge provenance={r.actualCostSource === 'linked' ? 'known' : 'manual'} />}
+                </td>
                 <td className="px-2 py-1.5 text-right tabular">
                   {r.actualCost === null ? '—' : formatMoney(r.actualCost - s.predictedCost, { signed: true })}
                   {costError !== null && (
@@ -84,8 +93,21 @@ export function ReviewTab({ decision: d, onReplace }: { decision: Decision; onRe
       {editing && (
         <Card title="How did it turn out?" description="Be honest — this is only for you, and it is what makes future insights useful.">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Actual total cost" htmlFor="rv-cost" hint={`Predicted ${formatMoney(s.predictedCost)}`}>
-              <MoneyInput id="rv-cost" allowNegative value={form.actualCost} onChange={(v) => setForm({ ...form, actualCost: v })} />
+            <Field
+              label={
+                <span className="inline-flex items-center gap-2">
+                  Actual total cost <ProvenanceBadge provenance={form.actualCostSource === 'linked' ? 'known' : 'manual'} />
+                </span>
+              }
+              htmlFor="rv-cost"
+              hint={`Predicted ${formatMoney(s.predictedCost)}`}
+            >
+              <MoneyInput id="rv-cost" allowNegative value={form.actualCost} onChange={(v) => setForm({ ...form, actualCost: v, actualCostSource: 'manual' })} />
+              {linkedTotal !== null && linkedTotal !== form.actualCost && (
+                <Button size="sm" variant="ghost" className="justify-self-start" onClick={() => setForm({ ...form, actualCost: linkedTotal, actualCostSource: 'linked' })}>
+                  Use linked total ({formatMoney(linkedTotal)})
+                </Button>
+              )}
             </Field>
             <Field label={`Satisfaction: ${form.satisfaction}/10`} htmlFor="rv-sat" hint={`Predicted ${s.predictedSatisfaction ?? '—'}/10`}>
               <input id="rv-sat" type="range" min={1} max={10} value={form.satisfaction} onChange={(e) => setForm({ ...form, satisfaction: Number(e.target.value) })} className="h-10 accent-[var(--accent)]" />
@@ -131,6 +153,7 @@ export function ReviewTab({ decision: d, onReplace }: { decision: Decision; onRe
           </div>
         </Card>
       )}
+      <LinkedTransactions decision={d} />
       <SnapshotView snapshot={s} decision={d} title="What you expected at the time" />
     </div>
   );

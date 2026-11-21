@@ -54,6 +54,14 @@ export interface Category {
 
 export type CategorySource = 'rule' | 'memory' | 'manual' | 'none';
 
+/** Part of a transaction allocated to a category. Split amounts must sum to the transaction amount. */
+export interface TransactionSplit {
+  id: Id;
+  amount: Cents;
+  categoryId: Id | null;
+  note?: string;
+}
+
 export interface Transaction {
   id: Id;
   accountId: Id;
@@ -70,6 +78,13 @@ export interface Transaction {
   categorySource: CategorySource;
   ruleId?: Id;
   notes?: string;
+  /**
+   * Optional allocation across several categories (e.g. a supermarket shop that is part
+   * groceries, part household). When present, analytics use the splits instead of categoryId.
+   */
+  splits?: TransactionSplit[];
+  /** Decision this transaction belongs to (used to measure a decision's actual cost). */
+  decisionId?: Id;
   /** Deduplication key: account|date|amount|normalised description|occurrence index. */
   fingerprint: string;
   /** Original CSV row values, kept unchanged for auditing. */
@@ -239,12 +254,22 @@ export interface ScenarioVariant {
   contributionDelta: Cents;
 }
 
+/** Monte Carlo configuration stored with a scenario set or decision. */
+export interface MonteCarloConfig {
+  enabled: boolean;
+  /** Annual standard deviation of returns (0.12 = 12%). */
+  annualVolatility: number;
+  runs: number;
+  seed: number;
+}
+
 export interface ScenarioSet {
   id: Id;
   name: string;
   description?: string;
   base: ProjectionAssumptions;
   variants: ScenarioVariant[];
+  monteCarlo?: MonteCarloConfig;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -297,6 +322,8 @@ export interface DecisionOption {
 export interface OutcomeReview {
   reviewedAt: Timestamp;
   actualCost: Cents | null;
+  /** 'linked' = computed from transactions linked to the decision; 'manual' = typed in. */
+  actualCostSource?: 'manual' | 'linked';
   actualBenefits: string;
   /** 1–10 */
   satisfaction: number;
@@ -324,6 +351,11 @@ export interface DecisionSnapshot {
   predictedSatisfaction: number | null;
   predictedCost: Cents;
   confidence: number | null;
+  /** Monte Carlo summary at the time, if simulation was enabled. */
+  monteCarlo?: {
+    settings: Omit<MonteCarloConfig, 'enabled'>;
+    options: { optionId: Id; p10: Cents; p50: Cents; p90: Cents }[];
+  };
 }
 
 /** scores[optionId][criterionId] = value (rating 0–10, or measured value). */
@@ -341,6 +373,7 @@ export interface Decision {
   scores: ScoreMatrix;
   /** Assumptions used to project the financial consequences of each option. */
   assumptions: ProjectionAssumptions;
+  monteCarlo?: MonteCarloConfig;
   notes: string;
   links: string[];
   selectedOptionId: Id | null;

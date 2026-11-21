@@ -20,7 +20,7 @@ export function InsightsPage() {
     if (a.completeMonths.length < 6) return null;
     const end = a.lastComplete;
     return comparePeriods(
-      a.transactions,
+      a.lines,
       a.categoryMap,
       { start: firstDayOfMonth(addMonths(end, -5)), end: lastDayOfMonth(addMonths(end, -3)) },
       { start: firstDayOfMonth(addMonths(end, -2)), end: lastDayOfMonth(end) },

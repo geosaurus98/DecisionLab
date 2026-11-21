@@ -226,3 +226,68 @@ describe('default rules', () => {
     expect(cat("PAK'NSAVE KILBIRNIE")).toBe('cat-groceries');
   });
 });
+
+describe('milestone 2: manual entry, splits, links, schema v2', () => {
+  it('adds a manual transaction that later dedupes against an import of the same row', async () => {
+    const accountId = await setupAccount();
+    const { addManualTransaction, deleteManualTransaction } = await import('../transactions');
+    const id = await addManualTransaction({ accountId, date: '2026-03-01', amount: -8420, description: 'EFTPOS COUNTDOWN KELBURN', categoryId: null });
+    const t = (await db.transactions.get(id))!;
+    expect(t.categoryId).toBe('cat-groceries');
+    expect(t.importId).toBeNull();
+    const preview = await previewImport(accountId, parseCsvText(CSV).rows, MAPPING);
+    expect(preview.counts.duplicate).toBe(1);
+    await deleteManualTransaction(id);
+    expect(await db.transactions.count()).toBe(0);
+    await expect(addManualTransaction({ accountId, date: '2026-02-30', amount: -1, description: 'x', categoryId: null })).rejects.toThrow();
+  });
+
+  it('splits a transaction across categories and analytics follow the splits', async () => {
+    const accountId = await setupAccount();
+    const { addManualTransaction, setTransactionSplits } = await import('../transactions');
+    const { toAnalysisLines } = await import('@/engine/splits');
+    const id = await addManualTransaction({ accountId, date: '2026-03-01', amount: -10000, description: 'THE WAREHOUSE', categoryId: null });
+    await expect(setTransactionSplits(id, [{ id: 'a', amount: -6000, categoryId: 'cat-groceries' }, { id: 'b', amount: -3000, categoryId: 'cat-shopping' }])).rejects.toThrow(/add up/);
+    await setTransactionSplits(id, [{ id: 'a', amount: -6000, categoryId: 'cat-groceries' }, { id: 'b', amount: -4000, categoryId: 'cat-shopping' }]);
+    const t = (await db.transactions.get(id))!;
+    expect(t.categoryId).toBe('cat-groceries');
+    expect(t.categorySource).toBe('manual');
+    const cats = new Map((await db.categories.toArray()).map((c) => [c.id, c]));
+    const s = summarise(toAnalysisLines([t]), cats);
+    expect(s.essentialSpending).toBe(6000);
+    expect(s.discretionarySpending).toBe(4000);
+    await setTransactionSplits(id, null);
+    expect((await db.transactions.get(id))!.splits).toBeUndefined();
+  });
+
+  it('links transactions to a decision via the decisionId index and unlinks them on delete', async () => {
+    const accountId = await setupAccount();
+    await commitImport({ accountId, fileName: 'a.csv', mapping: MAPPING, preview: await previewImport(accountId, parseCsvText(CSV).rows, MAPPING) });
+    const { linkTransactions } = await import('../transactions');
+    const { deleteDecision } = await import('../decisions');
+    const { linkedCost } = await import('@/engine/decisionLink');
+    const d = blankDecision(defaultAssumptions('2026-11-20'));
+    d.title = 'Café habit';
+    await saveDecision(d);
+    const cafes = await db.transactions.where('merchant').equals('MEMPHIS BELLE CAFE').toArray();
+    await linkTransactions(d.id, cafes.map((t) => t.id));
+    const linked = await db.transactions.where('decisionId').equals(d.id).toArray();
+    expect(linkedCost(linked)).toBe(900);
+    await deleteDecision(d.id);
+    expect(await db.transactions.where('decisionId').equals(d.id).count()).toBe(0);
+    expect(await db.transactions.count()).toBe(6);
+  });
+
+  it('restores a version 1 backup into the version 2 schema', async () => {
+    const accountId = await setupAccount();
+    await commitImport({ accountId, fileName: 'a.csv', mapping: MAPPING, preview: await previewImport(accountId, parseCsvText(CSV).rows, MAPPING) });
+    const v1 = JSON.parse(JSON.stringify(await exportBackup()));
+    v1.version = 1;
+    await deleteAllData();
+    const report = await restoreBackup(v1);
+    expect(report.ok).toBe(true);
+    expect(migrateBackup(v1).version).toBe(2);
+    expect(await db.transactions.count()).toBe(6);
+    expect(db.verno).toBe(2);
+  });
+});

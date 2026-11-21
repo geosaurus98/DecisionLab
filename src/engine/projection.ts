@@ -10,7 +10,7 @@
  * - Order of operations within a month, for timing = 'start':
  *     1. cash flows (contribution, recurring flows, one-offs) are applied
  *     2. investment return:   gain = max(B, 0) · r_m
- *     3. tax on positive gain: tax = max(gain, 0) · taxRate   (a simplification of NZ PIE/FIF)
+ *     3. tax on the return:    tax = gain · taxRate (losses give a credit; simplified NZ PIE)
  *     4. fee:                  fee = max(B, 0) · fee_m
  *   For timing = 'end', step 1 happens after steps 2–4 (ordinary annuity).
  * - A negative balance earns no return and pays no fee (no borrowing cost is modelled);
@@ -96,6 +96,42 @@ export const EMPTY_VARIANT: Pick<ScenarioVariant, 'oneOffs' | 'recurring' | 'con
   contributionDelta: 0,
 };
 
+/** Net cash flow (contribution + recurring + one-offs) for each month of the horizon. */
+export function flowSchedule(
+  a: ProjectionAssumptions,
+  variant: Pick<ScenarioVariant, 'oneOffs' | 'recurring' | 'contributionDelta'> = EMPTY_VARIANT,
+): Float64Array {
+  const inflM = monthlyRate(a.annualInflation);
+  const contribution = a.monthlyContribution + variant.contributionDelta;
+  const out = new Float64Array(a.horizonMonths);
+  for (let t = 0; t < a.horizonMonths; t++) out[t] = contribution + flowsForMonth(t, variant, inflM);
+  return out;
+}
+
+export interface MonthStep {
+  balance: number;
+  gain: number;
+  tax: number;
+  fee: number;
+}
+
+/**
+ * One month of the balance model, shared by the deterministic and Monte Carlo engines so
+ * both apply identical timing, tax and fee conventions. `rate` is this month's return.
+ */
+export function stepMonth(balance: number, monthFlows: number, rate: number, feeM: number, taxRate: number, timing: 'start' | 'end'): MonthStep {
+  let b = timing === 'start' ? balance + monthFlows : balance;
+  const investable = Math.max(b, 0);
+  const gain = investable * rate;
+  // Symmetric: a negative monthly return produces a tax credit, as PIE fund losses do.
+  // (Taxing only gains would add an artificial drag whenever returns are volatile.)
+  const tax = gain * taxRate;
+  const fee = investable * feeM;
+  b += gain - tax - fee;
+  if (timing === 'end') b += monthFlows;
+  return { balance: b, gain, tax, fee };
+}
+
 export function project(
   a: ProjectionAssumptions,
   variant: Pick<ScenarioVariant, 'oneOffs' | 'recurring' | 'contributionDelta'> = EMPTY_VARIANT,
@@ -105,7 +141,7 @@ export function project(
   const rM = monthlyRate(a.annualReturn);
   const feeM = monthlyFeeRate(a.annualFee);
   const inflM = monthlyRate(a.annualInflation);
-  const contribution = a.monthlyContribution + variant.contributionDelta;
+  const schedule = flowSchedule(a, variant);
 
   let balance = a.initialBalance;
   let flows = 0;
@@ -118,23 +154,13 @@ export function project(
   const points: ProjectionPoint[] = [];
 
   for (let t = 0; t < a.horizonMonths; t++) {
-    const monthFlows = contribution + flowsForMonth(t, variant, inflM);
-    if (a.timing === 'start') {
-      balance += monthFlows;
-      flows += monthFlows;
-    }
-    const investable = Math.max(balance, 0);
-    const gain = investable * rM;
-    const gainTax = Math.max(gain, 0) * a.taxRateOnReturns;
-    const fee = investable * feeM;
-    balance += gain - gainTax - fee;
-    growth += gain;
-    tax += gainTax;
-    fees += fee;
-    if (a.timing === 'end') {
-      balance += monthFlows;
-      flows += monthFlows;
-    }
+    const monthFlows = schedule[t]!;
+    const step = stepMonth(balance, monthFlows, rM, feeM, a.taxRateOnReturns, a.timing);
+    balance = step.balance;
+    flows += monthFlows;
+    growth += step.gain;
+    tax += step.tax;
+    fees += step.fee;
     const deflator = Math.pow(1 + inflM, t + 1);
     if (balance < 0) shortfallMonths.push(t);
     minimumBalance = Math.min(minimumBalance, balance);

@@ -24,7 +24,7 @@ import type {
 } from '@/domain/types';
 
 export const DB_NAME = 'decisionlab';
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export class DecisionLabDb extends Dexie {
   accounts!: Table<Account, string>;
@@ -53,6 +53,11 @@ export class DecisionLabDb extends Dexie {
       decisions: 'id, status, date, reviewDate, updatedAt',
       scenarioSets: 'id, updatedAt',
       settings: 'key',
+    });
+    // v2: transactions can be linked to a decision (decisionId) and split across categories
+    // (splits). Both fields are optional, so existing records need no data migration.
+    this.version(2).stores({
+      transactions: 'id, accountId, importId, date, categoryId, merchant, fingerprint, decisionId',
     });
   }
 }

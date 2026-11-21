@@ -197,6 +197,12 @@ export function SnapshotView({ snapshot: s, decision: d, title }: { snapshot: De
               ))}
             </tbody>
           </table>
+          {s.monteCarlo && (
+            <p className="text-xs text-muted">
+              Simulated range then (today’s $, P10–P90, {s.monteCarlo.settings.runs.toLocaleString()} runs at {formatPercent(s.monteCarlo.settings.annualVolatility)} volatility):{' '}
+              {s.monteCarlo.options.map((o) => `${name(o.optionId)} ${formatMoney(o.p10, { whole: true })}–${formatMoney(o.p90, { whole: true })}`).join(' · ')}
+            </p>
+          )}
           <p className="text-xs text-muted">
             Assumptions then: {formatPercent(s.assumptions.annualReturn)} return, {formatPercent(s.assumptions.annualFee, 2)} fees,{' '}
             {formatPercent(s.assumptions.taxRateOnReturns, 1)} tax, {formatPercent(s.assumptions.annualInflation)} inflation, from {formatMonth(s.assumptions.startMonth)}.

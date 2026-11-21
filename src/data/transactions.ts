@@ -1,7 +1,11 @@
 /** Transaction, category, rule and account mutations. */
 import { db } from './db';
-import { memoryMap, recategoriseAll } from '@/engine/categorise';
-import type { Account, Category, CategoryRule, Transaction } from '@/domain/types';
+import { categorise, memoryMap, recategoriseAll, sortRules } from '@/engine/categorise';
+import { normaliseMerchant } from '@/engine/merchant';
+import { baseKey } from '@/engine/dedupe';
+import { dominantSplitCategory, validateSplits } from '@/engine/splits';
+import { isIsoDate } from '@/domain/dates';
+import type { Account, Category, CategoryRule, Transaction, TransactionSplit } from '@/domain/types';
 import { newId, nowTimestamp } from '@/domain/ids';
 
 /**
@@ -132,4 +136,97 @@ export async function deleteAccount(id: string): Promise<void> {
   });
 }
 
-export type { Transaction };
+
+// ── Manual entry, splits and decision links ──
+
+/**
+ * Add a transaction by hand (e.g. a cash purchase). It goes through the same categorisation
+ * as imports unless a category is given. Its fingerprint uses the same base key as imports, so
+ * importing a statement that contains the same transaction later flags it as a duplicate.
+ */
+export async function addManualTransaction(input: {
+  accountId: string;
+  date: string;
+  amount: number;
+  description: string;
+  categoryId: string | null;
+  notes?: string;
+}): Promise<string> {
+  if (!Number.isSafeInteger(input.amount) || input.amount === 0) throw new Error('Enter a non-zero amount.');
+  if (!isIsoDate(input.date)) throw new Error('Enter a valid date.');
+  if (!input.description.trim()) throw new Error('Enter a description.');
+  return db.transaction('rw', db.transactions, db.rules, db.merchantMemory, async () => {
+    const merchant = normaliseMerchant(input.description);
+    const id = newId('txn');
+    const now = nowTimestamp();
+    let categoryId = input.categoryId;
+    let categorySource: Transaction['categorySource'] = input.categoryId ? 'manual' : 'none';
+    let ruleId: string | undefined;
+    if (!categoryId) {
+      const [rules, memory] = await Promise.all([db.rules.toArray(), db.merchantMemory.toArray()]);
+      const result = categorise({ description: input.description, merchant, amount: input.amount, accountId: input.accountId }, sortRules(rules), memoryMap(memory));
+      categoryId = result.categoryId;
+      categorySource = result.categorySource;
+      ruleId = result.ruleId;
+    }
+    await db.transactions.add({
+      id,
+      accountId: input.accountId,
+      importId: null,
+      date: input.date,
+      amount: input.amount,
+      description: input.description.trim(),
+      merchant,
+      categoryId,
+      categorySource,
+      ruleId,
+      notes: input.notes,
+      fingerprint: `${baseKey(input.accountId, input.date, input.amount, input.description.trim())}|m-${id}`,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return id;
+  });
+}
+
+/** Only manually entered transactions can be deleted individually; imported ones are removed by undoing the import. */
+export async function deleteManualTransaction(id: string): Promise<void> {
+  const t = await db.transactions.get(id);
+  if (!t) return;
+  if (t.importId !== null) throw new Error('Imported transactions are removed by undoing their import.');
+  await db.transactions.delete(id);
+}
+
+/** Set (or clear, with null) a transaction's split. Parts must sum exactly to the amount. */
+export async function setTransactionSplits(id: string, splits: TransactionSplit[] | null): Promise<void> {
+  const t = await db.transactions.get(id);
+  if (!t) throw new Error('Transaction not found');
+  if (splits === null) {
+    await db.transactions.update(id, { splits: undefined, updatedAt: nowTimestamp() });
+    return;
+  }
+  const errors = validateSplits(t.amount, splits);
+  if (errors.length) throw new Error(errors.join(' '));
+  await db.transactions.update(id, {
+    splits,
+    categoryId: dominantSplitCategory(splits),
+    categorySource: 'manual',
+    ruleId: undefined,
+    updatedAt: nowTimestamp(),
+  });
+}
+
+/** Link transactions to a decision (replacing any previous link of those transactions). */
+export async function linkTransactions(decisionId: string, txnIds: string[]): Promise<void> {
+  await db.transaction('rw', db.transactions, async () => {
+    const now = nowTimestamp();
+    await Promise.all(txnIds.map((id) => db.transactions.update(id, { decisionId, updatedAt: now })));
+  });
+}
+
+export async function unlinkTransactions(txnIds: string[]): Promise<void> {
+  await db.transaction('rw', db.transactions, async () => {
+    const now = nowTimestamp();
+    await Promise.all(txnIds.map((id) => db.transactions.update(id, { decisionId: undefined, updatedAt: now })));
+  });
+}

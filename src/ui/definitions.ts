@@ -20,4 +20,8 @@ export const DEFINITIONS = {
   opportunityCost:
     'The difference in projected balance at the horizon between this option and the best financial option, using the stated return, fee, tax and inflation assumptions. Illustrative, not a forecast.',
   realValue: "Values adjusted for inflation, expressed in today's dollars (the projection's start month).",
+  volatility:
+    'The standard deviation of annual returns: how much a typical year differs from the average. Roughly, two years in three fall within ±1 volatility of the expected return. Diversified growth funds have historically been around 10–15%; cash under 1%.',
+  mcDifference:
+    'For each simulated path, both alternatives experience the same market returns, so the difference isolates the effect of the decision itself. Percentiles are taken across paths.',
 } as const;

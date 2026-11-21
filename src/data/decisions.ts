@@ -5,6 +5,7 @@ import { newId, nowTimestamp } from '@/domain/ids';
 import { todayIso } from '@/domain/dates';
 import { scoreOptions } from '@/engine/scoring';
 import { compareVariants, optionToVariant, totalOptionCost } from '@/engine/projection';
+import { simulate } from '@/engine/montecarlo';
 
 export function blankDecision(assumptions: Decision['assumptions']): Decision {
   const now = nowTimestamp();
@@ -53,8 +54,13 @@ export async function saveDecision(d: Decision): Promise<void> {
   await db.decisions.put({ ...d, updatedAt: nowTimestamp() });
 }
 
+/** Delete a decision; transactions linked to it are unlinked (never deleted). */
 export async function deleteDecision(id: string): Promise<void> {
-  await db.decisions.delete(id);
+  await db.transaction('rw', db.decisions, db.transactions, async () => {
+    const linked = await db.transactions.where('decisionId').equals(id).toArray();
+    await Promise.all(linked.map((t) => db.transactions.update(t.id, { decisionId: undefined })));
+    await db.decisions.delete(id);
+  });
 }
 
 /** Build the immutable snapshot of a decision at the moment the choice is recorded. */
@@ -83,7 +89,19 @@ export function buildSnapshot(d: Decision, selectedOptionId: string, availableNo
     predictedSatisfaction: d.predictedSatisfaction,
     predictedCost: totalOptionCost(selected, d.assumptions.horizonMonths),
     confidence: d.confidence,
+    monteCarlo: monteCarloSummary(d),
   });
+}
+
+/** Percentiles of each option's final real balance, if Monte Carlo is enabled for the decision. */
+function monteCarloSummary(d: Decision): DecisionSnapshot['monteCarlo'] {
+  if (!d.monteCarlo?.enabled) return undefined;
+  const settings = { annualVolatility: d.monteCarlo.annualVolatility, runs: d.monteCarlo.runs, seed: d.monteCarlo.seed };
+  const res = simulate(d.assumptions, d.options.map(optionToVariant), settings);
+  return {
+    settings,
+    options: res.variants.map((v) => ({ optionId: v.variantId, p10: v.finalReal.p10, p50: v.finalReal.p50, p90: v.finalReal.p90 })),
+  };
 }
 
 /** Record the chosen option. The snapshot is written once and never regenerated. */

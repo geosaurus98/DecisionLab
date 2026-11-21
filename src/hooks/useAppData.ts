@@ -11,6 +11,7 @@ import type { Category, FinancialProfile, Transaction } from '@/domain/types';
 import { monthlySummaries, lastCompleteMonth, type MonthlySummary } from '@/engine/cashflow';
 import { detectRecurring, type RecurringSeries } from '@/engine/recurring';
 import { estimateFlexibility, type FlexibilityEstimate } from '@/engine/flexibility';
+import { toAnalysisLines, type AnalysisLine } from '@/engine/splits';
 import { todayIso, type IsoDate, type MonthKey } from '@/domain/dates';
 
 export function useCategories(): Category[] | undefined {
@@ -45,6 +46,8 @@ export function useDismissedRecurring(): Set<string> {
 export interface Analytics {
   loading: boolean;
   transactions: Transaction[];
+  /** One line per transaction, or per split part for split transactions. Use for all category analytics. */
+  lines: AnalysisLine[];
   categories: Category[];
   categoryMap: Map<string, Category>;
   months: MonthlySummary[];
@@ -64,7 +67,8 @@ export function useAnalytics(): Analytics {
     const txns = transactions ?? [];
     const cats = categories ?? [];
     const categoryMap = new Map(cats.map((c) => [c.id, c]));
-    const months = monthlySummaries(txns, categoryMap);
+    const lines = toAnalysisLines(txns);
+    const months = monthlySummaries(lines, categoryMap);
     const lastComplete = lastCompleteMonth(today);
     const completeMonths = months.filter((m) => m.month <= lastComplete);
     const recurring = detectRecurring(
@@ -77,6 +81,7 @@ export function useAnalytics(): Analytics {
     return {
       loading: transactions === undefined || categories === undefined,
       transactions: txns,
+      lines,
       categories: cats,
       categoryMap,
       months,

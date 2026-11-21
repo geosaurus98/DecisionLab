@@ -15,7 +15,7 @@ import { isIsoDate } from '@/domain/dates';
 
 export const BACKUP_FORMAT = 'decisionlab-backup';
 export const ENCRYPTED_FORMAT = 'decisionlab-encrypted-backup';
-export const BACKUP_VERSION = 1;
+export const BACKUP_VERSION = 2;
 export const PBKDF2_ITERATIONS = 600_000;
 
 const isoDate = z.string().refine(isIsoDate, 'Invalid date');
@@ -42,6 +42,8 @@ const schemas: Record<TableName, z.ZodType> = {
     categoryId: z.string().nullable(),
     categorySource: z.enum(['rule', 'memory', 'manual', 'none']),
     fingerprint: z.string(),
+    decisionId: z.string().optional(),
+    splits: z.array(z.looseObject({ id, amount: cents, categoryId: z.string().nullable() })).optional(),
   }),
   rules: z.looseObject({
     id,
@@ -84,8 +86,9 @@ export async function exportBackup(): Promise<BackupFile> {
 }
 
 /**
- * Upgrade older backup versions to the current shape. Version 1 is current; future schema
- * changes add steps here (e.g. `if (backup.version === 1) { …; backup.version = 2 }`).
+ * Upgrade older backup versions to the current shape, one step at a time.
+ * - v1 → v2: transactions gained optional `decisionId` and `splits`; decisions and scenario
+ *   sets gained optional `monteCarlo`. All optional, so no data changes are needed.
  */
 export function migrateBackup(raw: unknown): BackupFile {
   const parsed = backupSchema.safeParse(raw);
@@ -94,6 +97,7 @@ export function migrateBackup(raw: unknown): BackupFile {
   if (backup.version > BACKUP_VERSION) {
     throw new Error(`Backup version ${backup.version} is newer than this app supports (${BACKUP_VERSION}). Update DecisionLab first.`);
   }
+  if (backup.version === 1) backup.version = 2;
   for (const name of TABLE_NAMES) backup.data[name] ??= [];
   return backup;
 }
