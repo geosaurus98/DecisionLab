@@ -7,6 +7,7 @@ import { SETTING_KEYS } from '@/data/settings';
 import { confirmTransferPairs, rejectTransferPairs, saveRule, setTransactionCategory } from '@/data/transactions';
 import { findTransferPairs } from '@/engine/cashflow';
 import { groupUncategorised, pairKey, suggestRulePattern, type MerchantGroup } from '@/engine/review';
+import { buildSuggestionIndex, type CategorySuggestion } from '@/engine/suggest';
 import { merchantLabel } from '@/engine/merchant';
 import { formatDate } from '@/domain/dates';
 import { formatMoney } from '@/domain/money';
@@ -126,6 +127,19 @@ function MerchantGroups({ groups, a }: { groups: MerchantGroup[]; a: Analytics }
   const [limit, setLimit] = useState(PAGE);
   const filtered = groups.filter((g) => !q.trim() || g.merchant.toLowerCase().includes(q.trim().toLowerCase()) || g.sample.toLowerCase().includes(q.trim().toLowerCase()));
   const remaining = groups.reduce((s, g) => s + g.count, 0);
+  // Learn from everything already categorised (rules, your corrections, manual choices).
+  const suggestions = useMemo(() => {
+    const idx = buildSuggestionIndex(
+      a.transactions.filter((t) => t.categoryId !== null && !t.splits?.length).map((t) => ({ merchant: t.merchant, categoryId: t.categoryId! })),
+    );
+    return new Map(groups.map((g) => [g.merchant, idx.suggest(g.merchant)] as const).filter((x): x is [string, CategorySuggestion] => x[1] !== null));
+  }, [a.transactions, groups]);
+  const suggestedGroups = groups.filter((g) => suggestions.has(g.merchant));
+
+  async function acceptAll() {
+    for (const g of suggestedGroups) await setTransactionCategory(g.ids[0]!, suggestions.get(g.merchant)!.categoryId, true);
+    toast({ message: `Applied ${suggestedGroups.length} suggestions (${suggestedGroups.reduce((n, g) => n + g.count, 0)} transactions).`, tone: 'good' });
+  }
 
   async function categorise(g: MerchantGroup, categoryId: string | null) {
     if (!categoryId) return;
@@ -149,7 +163,16 @@ function MerchantGroups({ groups, a }: { groups: MerchantGroup[]; a: Analytics }
     <Card
       title={`Uncategorised, by merchant (${groups.length} merchants, ${remaining} transactions)`}
       description="Choose a category once per merchant: it applies to all of that merchant’s transactions, past and future. Largest groups first."
-      actions={<Input aria-label="Filter merchants" placeholder="Filter" value={q} onChange={(e) => setQ(e.target.value)} className="w-48" />}
+      actions={
+        <>
+          {suggestedGroups.length > 0 && (
+            <Button size="sm" onClick={acceptAll} title="Each suggestion comes from a similar merchant you have already categorised">
+              Accept all {suggestedGroups.length} suggestions
+            </Button>
+          )}
+          <Input aria-label="Filter merchants" placeholder="Filter" value={q} onChange={(e) => setQ(e.target.value)} className="w-48" />
+        </>
+      }
     >
       <ul className="grid gap-1">
         {filtered.slice(0, limit).map((g) => (
@@ -162,6 +185,16 @@ function MerchantGroups({ groups, a }: { groups: MerchantGroup[]; a: Analytics }
                 {g.sample} · {formatDate(g.firstDate)}
                 {g.firstDate !== g.lastDate && ` – ${formatDate(g.lastDate)}`}
               </p>
+              {suggestions.has(g.merchant) && (
+                <p className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="text-ink-2">
+                    Suggested: <strong>{a.categoryMap.get(suggestions.get(g.merchant)!.categoryId)?.name}</strong> — like “{merchantLabel(suggestions.get(g.merchant)!.like)}”
+                  </span>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => categorise(g, suggestions.get(g.merchant)!.categoryId)}>
+                    Use
+                  </Button>
+                </p>
+              )}
             </div>
             <span className={`tabular ${g.total > 0 ? 'text-good' : ''}`}>{formatMoney(g.total)}</span>
             <CategorySelect ariaLabel={`Category for ${merchantLabel(g.merchant)}`} categories={a.categories} value={null} onChange={(id) => categorise(g, id)} className="h-9 text-sm" />

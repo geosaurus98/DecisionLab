@@ -51,6 +51,8 @@ export interface FlexibilityInput {
   today: IsoDate;
   /** Optional category budgets; discretionary ones are compared with monthly capacity. */
   budgets?: Budget[];
+  /** Transactions used to roll balances forward from their anchor date. */
+  transactions?: BalanceTxn[];
 }
 
 export function estimateFlexibility(input: FlexibilityInput): FlexibilityEstimate {
@@ -60,19 +62,22 @@ export function estimateFlexibility(input: FlexibilityInput): FlexibilityEstimat
 
   // ── One-off capacity ──
   const availableNowLines: FlexLine[] = [];
-  const liquid = accounts.filter((a) => a.includeInLiquid && currentBalance(a));
-  const missingBalances = accounts.filter((a) => a.includeInLiquid && !currentBalance(a));
+  const txns = input.transactions ?? [];
+  const balances = new Map(accounts.map((a) => [a.id, currentBalance(a, txns)]));
+  const liquid = accounts.filter((a) => a.includeInLiquid && balances.get(a.id));
+  const missingBalances = accounts.filter((a) => a.includeInLiquid && !balances.get(a.id));
   let availableNow: Cents | null = null;
   if (liquid.length > 0) {
     let total = 0;
     for (const a of liquid) {
-      const bal = currentBalance(a)!;
+      const bal = balances.get(a.id)!;
       total += bal.amount;
+      const since = bal.rolledForward > 0 ? ` + ${bal.rolledForward} later transaction${bal.rolledForward === 1 ? '' : 's'} to ${bal.asOf}` : '';
       availableNowLines.push({
         label: `Balance: ${a.name}`,
         amount: bal.amount,
         provenance: bal.source === 'statement' ? 'known' : 'manual',
-        detail: bal.source === 'statement' ? `From your imported statement, as of ${bal.asOf}` : `Entered by you, as of ${bal.asOf}`,
+        detail: bal.source === 'statement' ? `From your imported statement, as of ${bal.anchor.asOf}${since}` : `Entered by you, as of ${bal.anchor.asOf}${since}`,
       });
     }
     availableNowLines.push({
@@ -106,7 +111,7 @@ export function estimateFlexibility(input: FlexibilityInput): FlexibilityEstimat
     for (const g of goals.filter((g) => g.earmarked)) {
       // A goal tracked by its own account only needs earmarking when that account's balance
       // is counted as liquid (otherwise it was never included in the total).
-      const saved = goalSaved(g, accounts);
+      const saved = goalSaved(g, accounts, txns);
       if (saved <= 0) continue;
       if (g.accountId && !liquid.some((a) => a.id === g.accountId)) continue;
       availableNowLines.push({ label: `Earmarked for goal: ${g.name}`, amount: -saved, provenance: 'manual' });
@@ -116,8 +121,8 @@ export function estimateFlexibility(input: FlexibilityInput): FlexibilityEstimat
     if (missingBalances.length > 0) {
       warnings.push(`No balance entered for ${missingBalances.map((a) => a.name).join(', ')}; excluded from available funds.`);
     }
-    const stale = liquid.filter((a) => currentBalance(a)!.asOf < addDays(today, -31));
-    if (stale.length > 0) warnings.push(`Balance for ${stale.map((a) => a.name).join(', ')} is more than a month old.`);
+    const stale = liquid.filter((a) => balances.get(a.id)!.asOf < addDays(today, -31));
+    if (stale.length > 0) warnings.push(`Latest balance information for ${stale.map((a) => a.name).join(', ')} is more than a month old — import a recent statement or update the balance.`);
   } else {
     warnings.push('Enter at least one account balance (Settings → Accounts) to estimate money available now.');
   }
@@ -200,23 +205,47 @@ export function estimateFlexibility(input: FlexibilityInput): FlexibilityEstimat
   return { availableNow, availableNowLines, monthlyCapacity, monthlyLines, warnings, monthsUsed: months.length, budgetedDiscretionary, unallocatedCapacity };
 }
 
+export interface CurrentBalance {
+  amount: Cents;
+  /** Date the balance is valid for (end of day). */
+  asOf: IsoDate;
+  source: 'statement' | 'manual';
+  /** The anchor the balance was rolled forward from. */
+  anchor: { amount: Cents; asOf: IsoDate };
+  /** Number of later transactions added to the anchor. */
+  rolledForward: number;
+}
+
+type BalanceTxn = { accountId: string; date: IsoDate; amount: Cents };
+
 /**
- * An account's most recent balance: the statement balance (known) or the manually entered
- * one, whichever is more recent. Ties favour the statement.
+ * An account's current balance: the most recent anchor (statement balance or one you entered;
+ * ties favour the statement), rolled forward by every transaction dated after it. A balance
+ * entered on any date — including an opening balance before the first transaction — therefore
+ * stays current as new statements are imported.
  */
-export function currentBalance(a: Account): { amount: Cents; asOf: IsoDate; source: 'statement' | 'manual' } | null {
+export function currentBalance(a: Account, txns: BalanceTxn[] = []): CurrentBalance | null {
   const s = a.statementBalance;
   const m = a.balance;
-  if (s && (!m || s.asOf >= m.asOf)) return { amount: s.amount, asOf: s.asOf, source: 'statement' };
-  if (m) return { amount: m.amount, asOf: m.asOf, source: 'manual' };
-  return null;
+  const pick = s && (!m || s.asOf >= m.asOf) ? { amount: s.amount, asOf: s.asOf, source: 'statement' as const } : m ? { amount: m.amount, asOf: m.asOf, source: 'manual' as const } : null;
+  if (!pick) return null;
+  let amount = pick.amount;
+  let asOf = pick.asOf;
+  let n = 0;
+  for (const t of txns) {
+    if (t.accountId !== a.id || t.date <= pick.asOf) continue;
+    amount += t.amount;
+    n++;
+    if (t.date > asOf) asOf = t.date;
+  }
+  return { amount, asOf, source: pick.source, anchor: { amount: pick.amount, asOf: pick.asOf }, rolledForward: n };
 }
 
 /** Amount saved towards a goal: its account's balance if linked, otherwise the manual amount. */
-export function goalSaved(goal: Goal, accounts: Account[]): Cents {
+export function goalSaved(goal: Goal, accounts: Account[], txns: BalanceTxn[] = []): Cents {
   if (goal.accountId) {
     const acc = accounts.find((a) => a.id === goal.accountId);
-    const bal = acc ? currentBalance(acc) : null;
+    const bal = acc ? currentBalance(acc, txns) : null;
     if (bal) return bal.amount;
   }
   return goal.currentAmount;

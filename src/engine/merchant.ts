@@ -55,11 +55,14 @@ export function normaliseMerchant(description: string): string {
   return s.trim() || description.trim().toUpperCase();
 }
 
+/** Short words that read better title-cased (street abbreviations etc.); other ≤2-letter tokens (AA, NZ) stay upper-case. */
+const TITLE_CASE_SHORT = new Set(['st', 'rd', 'dr', 'mt', 'ln', 'of', 'on', 'in', 'at', 'by', 'to']);
+
 /** Human-readable merchant label derived from the key. */
 export function merchantLabel(key: string): string {
   return key
     .toLowerCase()
     .split(' ')
-    .map((w) => (w.length <= 2 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
+    .map((w) => (w.length <= 2 && !TITLE_CASE_SHORT.has(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
     .join(' ');
 }

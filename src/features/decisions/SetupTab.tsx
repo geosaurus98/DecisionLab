@@ -6,12 +6,23 @@ import { CATEGORY_LABEL } from './labels';
 import { RATING_MAX, RATING_MIN } from '@/engine/scoring';
 import { useState } from 'react';
 import { PairwiseWeights } from './PairwiseWeights';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '@/data/db';
+import { BUILT_IN_TEMPLATES, criteriaFromHistory, type DecisionTemplate, type TemplateCriterion } from '@/engine/templates';
 
 const SUGGESTED_CRITERIA = ['Enjoyment', 'Long-term usefulness', 'Stress / hassle', 'Learning', 'Time cost'];
 
 export function SetupTab({ decision: d, onChange, errors, onNext }: { decision: Decision; onChange: (d: Decision) => void; errors: string[]; onNext: () => void }) {
   const set = (patch: Partial<Decision>) => onChange({ ...d, ...patch });
   const [pairwiseOpen, setPairwiseOpen] = useState(false);
+  const others = useLiveQuery(() => db.decisions.filter((x) => x.id !== d.id && x.criteria.length > 0).toArray(), [d.id]) ?? [];
+  const reused = criteriaFromHistory(others).filter((h) => !d.criteria.some((c) => c.name.trim().toLowerCase() === h.name.toLowerCase()));
+  const toCriterion = (t: TemplateCriterion) => ({ id: newId('crit'), name: t.name, type: t.type, direction: t.direction, weight: t.weight, unit: t.unit });
+  const isFresh = d.criteria.length === 0 && d.options.every((o) => /^Option [A-Z]$/.test(o.name) && o.upfrontCost === 0 && o.monthlyCost === 0);
+  const applyTemplate = (t: DecisionTemplate) => {
+    const options = t.options.map((name) => ({ id: newId('opt'), name, upfrontCost: 0, costMonth: 0, monthlyCost: 0 }));
+    set({ category: t.category, options, criteria: t.criteria.map(toCriterion), scores: Object.fromEntries(options.map((o) => [o.id, {}])), selectedOptionId: null, pairwise: undefined });
+  };
   const setOption = (id: string, patch: Partial<DecisionOption>) => set({ options: d.options.map((o) => (o.id === id ? { ...o, ...patch } : o)) });
   const setCriterion = (id: string, patch: Partial<Criterion>) => set({ criteria: d.criteria.map((c) => (c.id === id ? { ...c, ...patch } : c)) });
   const setScore = (optionId: string, criterionId: string, value: number | null) =>
@@ -34,6 +45,40 @@ export function SetupTab({ decision: d, onChange, errors, onNext }: { decision: 
 
   return (
     <div className="grid gap-5">
+      {isFresh && (
+        <Card title="Start from…" description="Optional. Pre-fills alternatives and criteria; you can change everything afterwards.">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            {BUILT_IN_TEMPLATES.map((t) => (
+              <button key={t.id} onClick={() => applyTemplate(t)} className="rounded-lg border border-border p-3 text-left text-sm hover:border-accent">
+                <span className="font-semibold">{t.label}</span>
+                <span className="mt-1 block text-xs text-ink-2">{t.hint}</span>
+              </button>
+            ))}
+          </div>
+          {others.length > 0 && (
+            <div className="mt-3 max-w-md">
+              <Field label="…or copy the criteria and weights from a past decision" htmlFor="copy-from">
+                <Select
+                  id="copy-from"
+                  value=""
+                  onChange={(e) => {
+                    const src = others.find((o) => o.id === e.target.value);
+                    if (src) set({ criteria: src.criteria.map((c) => ({ ...c, id: newId('crit') })), pairwise: undefined });
+                  }}
+                >
+                  <option value="">Choose a decision…</option>
+                  {others.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.title || 'Untitled'} ({o.criteria.length} criteria)
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+          )}
+        </Card>
+      )}
+
       <Card title="The decision">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Title" htmlFor="d-title" className="sm:col-span-2">
@@ -178,6 +223,16 @@ export function SetupTab({ decision: d, onChange, errors, onNext }: { decision: 
         />
         {d.pairwise && Object.keys(d.pairwise).length > 0 && d.criteria.length >= 2 && (
           <p className="mt-2 text-xs text-muted">Weights were last derived from pairwise comparisons; editing a weight directly overrides them.</p>
+        )}
+        {reused.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-ink-2">You often use:</span>
+            {reused.slice(0, 8).map((h) => (
+              <Button key={h.name} size="sm" variant="ghost" title={`Used in ${h.uses} decisions`} onClick={() => set({ criteria: [...d.criteria, toCriterion(h)] })}>
+                + {h.name} <span className="text-xs text-muted">×{h.uses}</span>
+              </Button>
+            ))}
+          </div>
         )}
         {unusedSuggestions.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">

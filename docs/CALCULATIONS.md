@@ -30,13 +30,17 @@ Every number DecisionLab shows is defined here. Code references point to the imp
 - **File order**: oldest-first or newest-first, from the first and last dates; if every row has the same date, from which direction the printed balances agree with the amounts.
 - **Summary balance**: some banks (e.g. Heartland) state the balance in summary lines above the table (“$X balance … as at <date>”). It is used as the closing balance when the file has no balance column and no transaction is dated after it. The preview also shows the *implied opening balance* (stated balance − Σ amounts); $0 means the file contains the account's complete history.
 - **Closing balance** = the chronologically last printed balance (plus any later transactions without one). On import it becomes the account's *statement balance* (provenance **Known**) if it is at least as recent as the existing one; undoing that import recomputes it from the remaining transactions.
-- **Current balance** used everywhere = the more recent of the statement balance and a manually entered balance (ties favour the statement).
+- **Current balance** used everywhere = the more recent anchor — the statement balance or a balance you entered (ties favour the statement) — **rolled forward** by every transaction dated after it. A balance entered on any date, including an opening balance before the first transaction, therefore stays current as new statements arrive. Provenance stays with the anchor (statement → Known, entered → Manual) and the detail line says how many later transactions were added.
 - **Reconciliation**: between two consecutive printed balances, the transactions in between must sum exactly to the difference. Any mismatch is reported as a gap (date range, expected, printed, difference) — usually a missing statement period or a duplicated transaction.
 - **Balance history**: end-of-day balance(d) = anchor − Σ amounts after d up to the anchor date (+ Σ amounts after the anchor date up to d), anchored on the current balance.
 
 ## Bank presets (`src/engine/csvPresets.ts`)
 
 Header signatures pre-fill the mapping. Heartland Bank is verified against real exports; ASB, ANZ, BNZ, Westpac and Kiwibank are **unverified** (based on publicly described layouts) until checked against a real export — see [BANK_PRESETS.md](BANK_PRESETS.md). Every row is still validated, and failures are shown, not imported.
+
+## Decision templates (`src/engine/templates.ts`)
+
+Built-in starters (big purchase, trip, job, subscription, savings change) pre-fill alternatives and rating criteria. *Copy from a past decision* copies its criteria and weights. *You often use* lists criteria appearing in at least two of your decisions (matched by name, case-insensitive) with their most common type and direction and a starting weight = mean weight share × 10, clamped to 1–5. All of these only pre-fill; nothing is locked.
 
 ## Robust row handling
 
@@ -50,7 +54,9 @@ Precedence: manual (never overwritten) → merchant memory (from “apply to sam
 
 ## Review queue (`src/engine/review.ts`)
 
-Uncategorised, unsplit transactions are grouped by merchant key (largest groups first, by count then |net amount|). Choosing a category for a group categorises every transaction in it and stores it as merchant memory, so future imports from that merchant are categorised too. Optionally a rule *merchant contains “first three words”* can be created from the same choice.
+Uncategorised, unsplit transactions are grouped by merchant key (largest groups first, by count then |net amount|).
+
+**Suggestions** (`src/engine/suggest.ts`): each group may get a suggested category from the most similar merchant you have already categorised (by rules, corrections or manual choices). Similarity is a weighted overlap of merchant-key words: Σ idf(shared) ÷ min(Σ idf(A), Σ idf(B)), with idf(w) = ln(1 + N/df(w)), so distinctive words count more than common ones like “AUCKLAND” or “NZ”. The first word of both merchants must match (names come first, places last), and similarity must be ≥ 0.5. Suggestions show the merchant they came from and are applied only when you click *Use* or *Accept all*. Choosing a category for a group categorises every transaction in it and stores it as merchant memory, so future imports from that merchant are categorised too. Optionally a rule *merchant contains “first three words”* can be created from the same choice.
 
 ## Duplicate detection (`src/engine/dedupe.ts`)
 
@@ -91,6 +97,8 @@ Provenance: statement balances are *Known*; entered balances, reserve, upcoming 
 - Expected by today (current month) = recurring bills in the category already due this month (on their dates, from the recurring calendar) + (budget − all of the month's recurring bills in the category, floored at 0) × elapsed share; capped at the budget.
 - Status: **over** if actual > budget; **ahead of pace** if, in the current month, actual > expected by today × 1.1; otherwise **on track**.
 - Suggested budget = median monthly net spending over the last three complete months, rounded **up** to the next $10.
+- **Rollover** (optional, per budget): from the month it is turned on, carry = Σ (budget − actual) over each complete month since; *available* = budget + carry. Unspent money adds to next month, overspending reduces it. Status and pace use the available amount.
+- **History**: actual vs budget for the last six complete months, using today's budget amounts.
 - In the flexibility estimate, *planned in discretionary budgets* = Σ budgets of non-essential categories; *not yet allocated* = monthly capacity − that sum (a warning appears if negative). Budgets do not change the capacity estimate itself.
 
 ## Decision scoring (`src/engine/scoring.ts`)

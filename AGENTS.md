@@ -36,7 +36,8 @@ src/features one folder per page/module
 
 ## Persistence changes
 
-Adding or changing a persisted field: update `src/domain/types.ts`, add a new `this.version(n)` in `src/data/db.ts` (never edit an old version), update zod schemas and `migrateBackup` in `src/data/backup.ts`, update `docs/DATA_MODEL.md`, and add a test.
+- New tables, new or changed indexes, or changes to the meaning/shape of existing data: update `src/domain/types.ts`, add a new `this.version(n)` in `src/data/db.ts` (never edit an old version) with an `.upgrade()` if data must change, bump `BACKUP_VERSION` and add a step to `migrateBackup`, update `docs/DATA_MODEL.md`, and add tests (including an upgrade test).
+- New **optional, non-indexed** fields that older records can simply lack: no Dexie version or backup version is needed — update the types, the zod schema if validated, `docs/DATA_MODEL.md`, and add a test.
 
 ## Privacy
 

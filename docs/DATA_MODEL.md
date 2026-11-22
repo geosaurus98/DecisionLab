@@ -44,7 +44,7 @@ erDiagram
 | `decisions` | `id`, `status`, `date`, `reviewDate`, `updatedAt` | `Decision` | Embeds options, criteria, score matrix, its own `ProjectionAssumptions`, `snapshot`, `snapshotHistory`, `review` |
 | `scenarioSets` | `id`, `updatedAt` | `ScenarioSet` | Base assumptions + variants (one-off and recurring flows, contribution change) + optional `monteCarlo` config |
 | `settings` | `key` | key–value | `financialProfile`, `defaultAssumptions`, `seeded`, `reviewReminders`, `rejectedTransferPairs` ("outId\|inId" list); device-only and excluded from backups: `backupState` (last backup, reminder interval, folder name) and `backupFolderHandle` |
-| `budgets` | `categoryId` | `Budget` | `monthlyAmount` (cents) per expense category |
+| `budgets` | `categoryId` | `Budget` | `monthlyAmount` (cents) per expense category; optional `rollover` and `rolloverFrom` (month) |
 | `recurringOverrides` | `key` | `RecurringOverride` | Your edits to a detected series: `status` confirmed/dismissed, `label`, `expectedAmount` |
 
 UI-only preferences (theme) are kept in `localStorage`, never financial data.
@@ -98,7 +98,7 @@ Restore: parse → `migrateBackup` (rejects unknown/newer formats) → zod valid
 | 1 | Initial schema | — |
 | 2 | `transactions.decisionId` index; optional `splits`, `decisionId`, `monteCarlo`, `actualCostSource` fields | None needed (new fields are optional). Backups v1 → v2 unchanged. |
 | 3 | New `budgets` table; optional `pairwise`, `extraFlows`, `goalId`, goal `accountId` | None needed. Backups v2 → v3: empty budgets table. |
-| 4 | New `recurringOverrides` table; optional `balanceAfter`, `rowIndex`, `statementBalance`; mapping `balanceColumn` | The old `dismissedRecurring` setting becomes dismissed overrides (database upgrade and backup migration, both tested). |
+| 4 (+ optional fields since) | Later optional, non-indexed fields: budget `rollover`/`rolloverFrom`, Monte Carlo risk options, import `statementBalance`. New `recurringOverrides` table; optional `balanceAfter`, `rowIndex`, `statementBalance`; mapping `balanceColumn` | The old `dismissedRecurring` setting becomes dismissed overrides (database upgrade and backup migration, both tested). |
 
 ## Migrations
 

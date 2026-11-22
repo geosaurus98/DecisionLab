@@ -286,6 +286,14 @@ try {
   if (optionNames.join() !== 'Japan trip,Invest the money') throw new Error(`unexpected options ${optionNames}`);
   ok('decision → Scenario Lab → new decision round trip keeps the alternatives');
 
+  await page.goto(`${BASE}#/decisions/new`);
+  await page.waitForURL(/#\/decisions\/dec_/);
+  await page.getByRole('button', { name: /Trip or experience/ }).click();
+  const tplOptions = await page.locator('input[id^="o-name-"]').evaluateAll((els) => els.map((e) => e.value));
+  if (tplOptions.join() !== 'Go,Don’t go') throw new Error(`template options ${tplOptions}`);
+  if ((await page.locator('input[id^="c-name-"]').count()) !== 4) throw new Error('template criteria not applied');
+  ok('built-in template pre-fills alternatives and criteria');
+
   // Accessibility audit (axe-core, WCAG 2.1 A/AA + best practice) of every page in both themes,
   // with synthetic demo data. CSP is bypassed only in this test context to inject axe.
   const auditCtx = await browser.newContext({ bypassCSP: true, viewport: { width: 1360, height: 900 } });

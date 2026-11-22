@@ -19,5 +19,6 @@ describe('merchantLabel', () => {
   it('title-cases words but keeps short tokens (AA, NZ) upper-case', () => {
     expect(merchantLabel('AA AUTO SERVICE NEWTOWN NZ')).toBe('AA Auto Service Newtown NZ');
     expect(merchantLabel('Z ENERGY 2')).toBe('Z Energy 2');
+    expect(merchantLabel('LITTLE PENANG CUBA ST')).toBe('Little Penang Cuba St');
   });
 });

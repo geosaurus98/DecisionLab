@@ -269,6 +269,8 @@ function PlanningSection() {
 function GoalsCard({ goals }: { goals: Goal[] }) {
   const [editing, setEditing] = useState<Goal | null>(null);
   const accounts = useLiveQuery(() => db.accounts.toArray(), []) ?? [];
+  const goalAccountIds = goals.map((g) => g.accountId).filter((x): x is string => !!x);
+  const goalTxns = useLiveQuery(() => db.transactions.where('accountId').anyOf(goalAccountIds).toArray(), [goalAccountIds.join()]) ?? [];
   return (
     <Card
       title="Goals"
@@ -284,7 +286,7 @@ function GoalsCard({ goals }: { goals: Goal[] }) {
       ) : (
         <ul className="grid gap-2">
           {goals.map((g) => {
-            const saved = goalSaved(g, accounts);
+            const saved = goalSaved(g, accounts, goalTxns);
             const progress = g.targetAmount > 0 ? Math.min(1, Math.max(0, saved / g.targetAmount)) : 0;
             return (
               <li key={g.id} className="rounded-lg border border-border p-3 text-sm">

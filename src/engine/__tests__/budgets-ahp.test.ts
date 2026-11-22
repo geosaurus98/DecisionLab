@@ -111,3 +111,34 @@ describe('scenario variants as decision options', () => {
     expect(reachedByDate(res, { ...target, targetAmount: undefined }, '2027-09-15')).toBeNull();
   });
 });
+
+import { budgetHistory, rolloverCarry } from '../budgets';
+
+describe('budget rollover and history', () => {
+  const lines = [
+    { date: '2026-08-10', amount: -15000, categoryId: 'eating' },
+    { date: '2026-09-10', amount: -25000, categoryId: 'eating' },
+    { date: '2026-10-10', amount: -18000, categoryId: 'eating' },
+    { date: '2026-11-03', amount: -5000, categoryId: 'eating' },
+  ];
+  const base = { categoryId: 'eating', monthlyAmount: 20000, updatedAt: '' };
+  it('carries unspent and overspent amounts forward from the start month', () => {
+    const b = { ...base, rollover: true, rolloverFrom: '2026-08' };
+    // Aug +5000, Sep −5000, Oct +2000 ⇒ +2000 into November
+    expect(rolloverCarry(lines, categoryMap, b, '2026-11')).toBe(2000);
+    expect(rolloverCarry(lines, categoryMap, b, '2026-08')).toBe(0);
+    expect(rolloverCarry(lines, categoryMap, base, '2026-11')).toBe(0);
+    const r = budgetReport(lines, categoryMap, [b], '2026-11', '2026-11-15');
+    expect(r.lines[0]).toMatchObject({ budget: 20000, carried: 2000, available: 22000, actual: 5000, remaining: 17000 });
+  });
+  it('judges status against the available amount after overspending carries in', () => {
+    const b = { ...base, rollover: true, rolloverFrom: '2026-09' }; // Sep −5000, Oct +2000 ⇒ −3000
+    const r = budgetReport([...lines, { date: '2026-11-04', amount: -13000, categoryId: 'eating' }], categoryMap, [b], '2026-11', '2026-11-28');
+    expect(r.lines[0]).toMatchObject({ available: 17000, actual: 18000, status: 'over' });
+  });
+  it('builds a planned-vs-actual history per month', () => {
+    const h = budgetHistory(lines, categoryMap, [base, { categoryId: 'transfer', monthlyAmount: 1, updatedAt: '' }], ['2026-08', '2026-09']);
+    expect(h.map((r) => r.cells)).toEqual([[{ categoryId: 'eating', budget: 20000, actual: 15000 }], [{ categoryId: 'eating', budget: 20000, actual: 25000 }]]);
+    expect(h[1]!.totalActual).toBe(25000);
+  });
+});

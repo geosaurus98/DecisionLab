@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated: November 2026 — milestone 1 (foundation + vertical slice) milestones 2 (“Uncertainty and reality”), 3 (“Decide with less friction”) 4 (“Real-world data”) and 5 (“Verify and learn”: review queue, criterion-level insights, Monte Carlo crash risk and uncertain inflation, sequence stress test, backup reminders and folder backups, performance at 50k transactions).
+Last updated: November 2026 — milestone 1 (foundation + vertical slice) milestones 2 (“Uncertainty and reality”), 3 (“Decide with less friction”) 4 (“Real-world data”) 5 (“Verify and learn”) and 6 (“Smarter categorisation and planning”: category suggestions, budget history and rollover, balances rolled forward with an opening-balance prompt, decision templates).
 
 Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 
@@ -14,7 +14,7 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Local persistence (Dexie/IndexedDB) | ✅ | Versioned schema, persistent-storage request |
 | Shared domain models | ✅ | `src/domain/types.ts` |
 | Synthetic demonstration dataset | ✅ | Seeded, loaded through the real import pipeline, labelled, removable |
-| Testing infrastructure | ✅ | Vitest (188 tests incl. component and 50k-row performance tests) + Playwright E2E (24 steps) + axe audit |
+| Testing infrastructure | ✅ | Vitest (198 tests incl. component and 50k-row performance tests) + Playwright E2E (25 steps) + axe audit |
 | Export/import (backup/restore), encrypted backup | ✅ | zod-validated, AES-GCM; reminders, one-click backup, optional backup folder |
 | PWA / offline | 🟡 | Manifest + service worker caching the app shell; install prompt UX not customised |
 
@@ -23,12 +23,12 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Item | Status | Notes |
 | --- | --- | --- |
 | CSV import wizard with mapping, preview, NZ formats, debit/credit | ✅ | Header-row detection, saved mappings, bank presets: Heartland ✅ verified with real exports; ASB/ANZ/BNZ/Westpac/Kiwibank 🟡 unverified |
-| Statement balances, reconciliation, balance history | ✅ | Known balance from a balance column or the file's summary lines; gaps and implied opening balance reported |
+| Statement balances, reconciliation, balance history | ✅ | Known balance from a balance column or the file's summary lines; gaps and implied opening balance reported; balances roll forward from any anchor date; opening-balance prompt for accounts without one |
 | Multiple accounts and imports, import history, undo | ✅ | |
 | Duplicate detection | ✅ | Occurrence-aware |
 | Original values kept for audit | ✅ | Visible in transaction details |
 | Search, filters, editing (category, notes) | ✅ | |
-| Review queue (categorise by merchant, confirm/reject transfer pairs) | ✅ | |
+| Review queue (categorise by merchant, confirm/reject transfer pairs) | ✅ | Suggestions from similar merchants you've categorised |
 | Manual transaction entry | ✅ | Dedupes against later imports; deletable |
 | Split transactions | ✅ | Exact-cent validation; analytics use split parts |
 | Editable categories (kind, essential, colour, archive) | ✅ | |
@@ -41,13 +41,13 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Spending anomalies | ✅ | Robust z-score |
 | Period comparison | ✅ | Month vs previous 3 months, or any two custom date ranges |
 | Financial flexibility with provenance | ✅ | Shows discretionary budgets and unallocated capacity |
-| Category budgets with variance tracking | ✅ | Pace expects recurring bills on their due dates; suggestions from median spending |
+| Category budgets with variance tracking | ✅ | Pace expects recurring bills on their due dates; suggestions from median spending; history; optional rollover |
 
 ## Phase 3 — ChoiceLedger
 
 | Item | Status | Notes |
 | --- | --- | --- |
-| Decision creation (all listed fields) | ✅ | Autosaved |
+| Decision creation (all listed fields) | ✅ | Autosaved; built-in templates, copy criteria from a past decision, reused-criteria chips |
 | Alternatives with costs, criteria with weights and direction | ✅ | |
 | Weighted scoring with normalisation and full breakdown | ✅ | |
 | Weight sensitivity and fragility warning | ✅ | |

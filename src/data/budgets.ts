@@ -12,7 +12,15 @@ export async function saveBudget(categoryId: string, monthlyAmount: Cents | null
   if (!Number.isSafeInteger(monthlyAmount) || monthlyAmount < 0) throw new Error('Budgets must be a positive amount.');
   const cat = await db.categories.get(categoryId);
   if (cat?.kind !== 'expense') throw new Error('Only expense categories can have a budget.');
-  await db.budgets.put({ categoryId, monthlyAmount, updatedAt: nowTimestamp() });
+  const existing = await db.budgets.get(categoryId);
+  await db.budgets.put({ ...existing, categoryId, monthlyAmount, updatedAt: nowTimestamp() });
+}
+
+/** Turn rollover on (from the given month) or off for a category's budget. */
+export async function setBudgetRollover(categoryId: string, on: boolean, fromMonth: string): Promise<void> {
+  const existing = await db.budgets.get(categoryId);
+  if (!existing) throw new Error('Set a budget amount first.');
+  await db.budgets.put({ ...existing, rollover: on, rolloverFrom: on ? existing.rolloverFrom ?? fromMonth : undefined, updatedAt: nowTimestamp() });
 }
 
 /** Apply suggested budgets; by default only to categories without a budget. Returns the number set. */

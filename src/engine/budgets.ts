@@ -13,7 +13,7 @@
  */
 import type { Cents } from '@/domain/money';
 import type { Budget, Category } from '@/domain/types';
-import { daysInMonth, firstDayOfMonth, lastDayOfMonth, monthKey, type IsoDate, type MonthKey } from '@/domain/dates';
+import { addMonths, daysInMonth, firstDayOfMonth, lastDayOfMonth, monthKey, type IsoDate, type MonthKey } from '@/domain/dates';
 import { categoryTrend, spendingByCategory, type AnalysedTxn } from './cashflow';
 import { occurrences, type RecurringSeries } from './recurring';
 import { median } from './stats';
@@ -31,6 +31,10 @@ export interface BudgetLine {
   expectedByNow: Cents;
   /** Recurring bills in this category expected during the month. */
   billsThisMonth: Cents;
+  /** Amount carried in from earlier months (rollover budgets only; may be negative). */
+  carried: Cents;
+  /** Budget plus carried amount: what is available this month. */
+  available: Cents;
 }
 
 export interface BudgetReport {
@@ -69,7 +73,9 @@ export function budgetReport(
   const end = lastDayOfMonth(month);
   const out: BudgetLine[] = active.map((b) => {
     const actual = actualByCat.get(b.categoryId) ?? 0;
-    const usedShare = actual / b.monthlyAmount;
+    const carried = rolloverCarry(lines, categories, b, month);
+    const available = b.monthlyAmount + carried;
+    const usedShare = available > 0 ? actual / available : actual > 0 ? Infinity : 0;
     let billsThisMonth = 0;
     let billsDue = 0;
     for (const r of recurring) {
@@ -79,10 +85,10 @@ export function budgetReport(
         if (d <= today) billsDue += r.typicalAmount;
       }
     }
-    const flexible = Math.max(0, b.monthlyAmount - billsThisMonth);
-    const expectedByNow = current ? Math.min(b.monthlyAmount, Math.round(billsDue + flexible * elapsed)) : b.monthlyAmount;
-    const status: BudgetStatus = actual > b.monthlyAmount ? 'over' : current && actual > expectedByNow * AT_RISK_TOLERANCE ? 'atRisk' : 'onTrack';
-    return { categoryId: b.categoryId, budget: b.monthlyAmount, actual, remaining: b.monthlyAmount - actual, usedShare, status, expectedByNow, billsThisMonth };
+    const flexible = Math.max(0, available - billsThisMonth);
+    const expectedByNow = current ? Math.min(Math.max(available, 0), Math.round(billsDue + flexible * elapsed)) : available;
+    const status: BudgetStatus = actual > available ? 'over' : current && actual > expectedByNow * AT_RISK_TOLERANCE ? 'atRisk' : 'onTrack';
+    return { categoryId: b.categoryId, budget: b.monthlyAmount, actual, remaining: available - actual, usedShare, status, expectedByNow, billsThisMonth, carried, available };
   });
   let unbudgetedActual = 0;
   for (const [id, total] of actualByCat) if (id === null || !budgeted.has(id)) unbudgetedActual += total;
@@ -97,6 +103,37 @@ export function budgetReport(
     essentialBudget: sumBy((c) => c?.essential === true),
     discretionaryBudget: sumBy((c) => c?.essential !== true),
   };
+}
+
+/**
+ * Rollover carry into `month`: Σ (budget − actual) over complete months from rolloverFrom up
+ * to the month before. Unspent amounts add to this month's budget; overspending reduces it.
+ */
+export function rolloverCarry(lines: AnalysedTxn[], categories: Map<string, Category>, b: Budget, month: MonthKey): Cents {
+  if (!b.rollover || !b.rolloverFrom || b.rolloverFrom >= month) return 0;
+  let carry = 0;
+  for (let m = b.rolloverFrom; m < month; m = addMonths(m, 1)) {
+    const actual = spendingByCategory(lines, categories, { start: firstDayOfMonth(m), end: lastDayOfMonth(m) }).find((c) => c.categoryId === b.categoryId)?.total ?? 0;
+    carry += b.monthlyAmount - actual;
+  }
+  return carry;
+}
+
+export interface BudgetHistoryRow {
+  month: MonthKey;
+  cells: { categoryId: string; budget: Cents; actual: Cents }[];
+  totalBudget: Cents;
+  totalActual: Cents;
+}
+
+/** Planned vs actual per budgeted category for each month (uses today's budget amounts). */
+export function budgetHistory(lines: AnalysedTxn[], categories: Map<string, Category>, budgets: Budget[], months: MonthKey[]): BudgetHistoryRow[] {
+  const active = budgets.filter((b) => b.monthlyAmount > 0 && categories.get(b.categoryId)?.kind === 'expense');
+  return months.map((month) => {
+    const totals = new Map(spendingByCategory(lines, categories, { start: firstDayOfMonth(month), end: lastDayOfMonth(month) }).map((c) => [c.categoryId, c.total]));
+    const cells = active.map((b) => ({ categoryId: b.categoryId, budget: b.monthlyAmount, actual: totals.get(b.categoryId) ?? 0 }));
+    return { month, cells, totalBudget: cells.reduce((a, c) => a + c.budget, 0), totalActual: cells.reduce((a, c) => a + c.actual, 0) };
+  });
 }
 
 /**

@@ -499,3 +499,18 @@ describe('backup schedule', () => {
     expect(decided.snapshot!.monteCarlo!.settings).toMatchObject({ crashProbability: 0.05, crashSize: 0.3, inflationVolatility: 0.01 });
   });
 });
+
+describe('budget rollover persistence', () => {
+  it('keeps rollover settings when the amount changes, and clears them when turned off', async () => {
+    const { saveBudget, setBudgetRollover } = await import('../budgets');
+    await expect(setBudgetRollover('cat-eating-out', true, '2026-11')).rejects.toThrow();
+    await saveBudget('cat-eating-out', 20000);
+    await setBudgetRollover('cat-eating-out', true, '2026-11');
+    await saveBudget('cat-eating-out', 25000);
+    expect(await db.budgets.get('cat-eating-out')).toMatchObject({ monthlyAmount: 25000, rollover: true, rolloverFrom: '2026-11' });
+    await setBudgetRollover('cat-eating-out', true, '2027-01'); // keeps the original start month
+    expect((await db.budgets.get('cat-eating-out'))!.rolloverFrom).toBe('2026-11');
+    await setBudgetRollover('cat-eating-out', false, '2027-01');
+    expect(await db.budgets.get('cat-eating-out')).toMatchObject({ rollover: false, rolloverFrom: undefined });
+  });
+});

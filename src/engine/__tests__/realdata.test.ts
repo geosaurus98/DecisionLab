@@ -236,3 +236,20 @@ describe('Heartland Bank layout (synthetic rows in the verified format)', () => 
     expect(cat('Internal Transfer', 100000)).toBe('cat-transfers');
   });
 });
+
+describe('rolling balances forward', () => {
+  const acc = { id: 'a', name: 'A', type: 'everyday' as const, currency: 'NZD' as const, includeInLiquid: true, createdAt: '' };
+  const txns = [
+    { accountId: 'a', date: '2026-03-01', amount: 1000 },
+    { accountId: 'a', date: '2026-03-02', amount: -300 },
+    { accountId: 'a', date: '2026-03-05', amount: -200 },
+    { accountId: 'b', date: '2026-03-06', amount: 999 },
+  ];
+  it('adds transactions after the anchor date, for manual and statement anchors', () => {
+    expect(currentBalance({ ...acc, balance: { amount: 5000, asOf: '2026-03-01' } }, txns)).toMatchObject({ amount: 4500, asOf: '2026-03-05', source: 'manual', rolledForward: 2 });
+    // An opening balance the day before the first transaction rolls through everything.
+    expect(currentBalance({ ...acc, balance: { amount: 0, asOf: '2026-02-28' } }, txns)).toMatchObject({ amount: 500, rolledForward: 3 });
+    expect(currentBalance({ ...acc, statementBalance: { amount: 700, asOf: '2026-03-02', importId: 'i' } }, txns)).toMatchObject({ amount: 500, source: 'statement', rolledForward: 1 });
+    expect(currentBalance({ ...acc, balance: { amount: 1, asOf: '2026-03-10' } }, txns)).toMatchObject({ amount: 1, asOf: '2026-03-10', rolledForward: 0 });
+  });
+});

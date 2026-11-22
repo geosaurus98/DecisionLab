@@ -125,6 +125,7 @@ export function useFlexibility(analytics: Analytics): FlexibilityEstimate | unde
       categories: analytics.categoryMap,
       today: analytics.today,
       budgets,
+      transactions: analytics.transactions,
     });
   }, [accounts, goals, profile, budgets, analytics]);
 }

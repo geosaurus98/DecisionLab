@@ -213,6 +213,9 @@ export interface Budget {
   categoryId: Id;
   monthlyAmount: Cents;
   updatedAt: Timestamp;
+  /** Carry each month's unspent (or overspent) amount into the next, starting at rolloverFrom. */
+  rollover?: boolean;
+  rolloverFrom?: MonthKey;
 }
 
 /** User-entered planning inputs for the flexibility estimate. Values are manual by definition. */
