@@ -11,6 +11,7 @@ import { useToast } from '@/ui/toast';
 import { FlexibilityPanel } from './FlexibilityPanel';
 import { UpcomingBillsCard } from '../spending/RecurringCard';
 import { BackupReminder } from '../settings/BackupDialog';
+import { GoalsOverview } from './GoalsOverview';
 import { STATUS_LABEL } from '../decisions/labels';
 
 export function OverviewPage() {
@@ -116,6 +117,8 @@ export function OverviewPage() {
           <FlexibilityPanel estimate={flex} />
         </Card>
       )}
+
+      <GoalsOverview a={a} />
 
       {hasData && <UpcomingBillsCard a={a} />}
 

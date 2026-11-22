@@ -12,6 +12,7 @@ import { comparePeriods } from '@/engine/cashflow';
 import { addMonths, firstDayOfMonth, formatMonth, lastDayOfMonth } from '@/domain/dates';
 import { formatMoney } from '@/domain/money';
 import { CATEGORY_LABEL } from '../decisions/labels';
+import { YearReviewCard } from './YearReview';
 
 export function InsightsPage() {
   const decisions = useLiveQuery(() => db.decisions.toArray(), []);
@@ -37,6 +38,7 @@ export function InsightsPage() {
   return (
     <div className="grid gap-5">
       <PageHeader title="Insights" description="Patterns in how your predictions compare with reality. Every figure shows how many decisions it is based on." />
+      {a.transactions.length > 0 && <YearReviewCard a={a} decisions={decisions} />}
 
       {cal.reviewed === 0 ? (
         <EmptyState title="No reviewed decisions yet">

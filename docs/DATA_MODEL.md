@@ -40,7 +40,7 @@ erDiagram
 | `merchantMemory` | `merchant` | `MerchantMemory` | Learned from manual corrections; outranks rules |
 | `imports` | `id`, `accountId`, `importedAt` | `ImportBatch` | Mapping used, counts, date range, optional `statementBalance` stated by the file; `status: active/undone` (kept after undo for history) |
 | `importProfiles` | `id` | `ImportProfile` | Saved CSV column mappings |
-| `goals` | `id` | `Goal` | `earmarked` amounts are excluded from available funds; optional `accountId` uses that account's balance as the saved amount |
+| `goals` | `id` | `Goal` | `earmarked` amounts are excluded from available funds; optional `accountId` uses that account's balance as the saved amount; optional `monthlyContribution`, `annualReturn`, `annualVolatility` for the savings plan |
 | `decisions` | `id`, `status`, `date`, `reviewDate`, `updatedAt` | `Decision` | Embeds options, criteria, score matrix, its own `ProjectionAssumptions`, `snapshot`, `snapshotHistory`, `review` |
 | `scenarioSets` | `id`, `updatedAt` | `ScenarioSet` | Base assumptions + variants (one-off and recurring flows, contribution change) + optional `monteCarlo` config |
 | `settings` | `key` | key–value | `financialProfile`, `defaultAssumptions`, `seeded`, `reviewReminders`, `rejectedTransferPairs` ("outId\|inId" list); device-only and excluded from backups: `backupState` (last backup, reminder interval, folder name) and `backupFolderHandle` |

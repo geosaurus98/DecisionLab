@@ -294,6 +294,36 @@ try {
   if ((await page.locator('input[id^="c-name-"]').count()) !== 4) throw new Error('template criteria not applied');
   ok('built-in template pre-fills alternatives and criteria');
 
+  // Goals and the long view
+  await page.goto(`${BASE}#/settings`);
+  await page.getByRole('tab', { name: 'Planning & goals' }).click();
+  await page.getByRole('button', { name: 'Add goal' }).click();
+  await page.fill('#g-name', 'Laptop');
+  await page.fill('#g-target', '3000');
+  await page.fill('#g-current', '600');
+  // Target: end of the month 11 months from now ⇒ 12 monthly contributions, whatever today is.
+  const now = new Date();
+  const goalEnd = new Date(now.getFullYear(), now.getMonth() + 12, 0);
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  await page.fill('#g-date', iso(goalEnd));
+  await page.fill('#g-return', '0');
+  await page.fill('#g-monthly', '150');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expectText('Needs $200/month for 12 months'); // ($3,000 − $600) ÷ 12 with no return
+  await expectText('Behind plan');
+  await page.goto(BASE);
+  await expectText('Edit goals');
+  ok('goal savings plan: $200/month needed; planned $150 is flagged as behind');
+
+  await page.goto(`${BASE}#/spending`);
+  await expectText('Net worth');
+  await page.goto(`${BASE}#/insights`);
+  await expectText('Year in review');
+  await page.goto(`${BASE}#/transactions`);
+  await page.getByRole('tab', { name: 'Categorisation rules' }).click();
+  await expectText('No matches');
+  ok('net worth, year in review and rule health are shown');
+
   // Accessibility audit (axe-core, WCAG 2.1 A/AA + best practice) of every page in both themes,
   // with synthetic demo data. CSP is bypassed only in this test context to inject axe.
   const auditCtx = await browser.newContext({ bypassCSP: true, viewport: { width: 1360, height: 900 } });

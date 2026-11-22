@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated: November 2026 — milestone 1 (foundation + vertical slice) milestones 2 (“Uncertainty and reality”), 3 (“Decide with less friction”) 4 (“Real-world data”) 5 (“Verify and learn”) and 6 (“Smarter categorisation and planning”: category suggestions, budget history and rollover, balances rolled forward with an opening-balance prompt, decision templates).
+Last updated: November 2026 — milestone 1 (foundation + vertical slice) milestones 2 (“Uncertainty and reality”), 3 (“Decide with less friction”) 4 (“Real-world data”) 5 (“Verify and learn”) 6 (“Smarter categorisation and planning”) and 7 (“Goals and the long view”: goal savings plans, net worth over time, year in review, rule health).
 
 Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 
@@ -14,7 +14,7 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Local persistence (Dexie/IndexedDB) | ✅ | Versioned schema, persistent-storage request |
 | Shared domain models | ✅ | `src/domain/types.ts` |
 | Synthetic demonstration dataset | ✅ | Seeded, loaded through the real import pipeline, labelled, removable |
-| Testing infrastructure | ✅ | Vitest (198 tests incl. component and 50k-row performance tests) + Playwright E2E (25 steps) + axe audit |
+| Testing infrastructure | ✅ | Vitest (205 tests incl. component and 50k-row performance tests) + Playwright E2E (27 steps) + axe audit |
 | Export/import (backup/restore), encrypted backup | ✅ | zod-validated, AES-GCM; reminders, one-click backup, optional backup folder |
 | PWA / offline | 🟡 | Manifest + service worker caching the app shell; install prompt UX not customised |
 
@@ -32,7 +32,7 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Manual transaction entry | ✅ | Dedupes against later imports; deletable |
 | Split transactions | ✅ | Exact-cent validation; analytics use split parts |
 | Editable categories (kind, essential, colour, archive) | ✅ | |
-| Rule-based categorisation (create, reorder, enable/disable, regex, re-apply) | ✅ | |
+| Rule-based categorisation (create, reorder, enable/disable, regex, re-apply) | ✅ | Rule health: no matches, never wins, conflicts with your choices |
 | Learning from corrections (merchant memory) | ✅ | |
 | Transfers / savings not double counted | ✅ | Plus likely-transfer pair suggestions |
 | Income vs expenses, monthly cash flow, savings rate | ✅ | |
@@ -65,7 +65,9 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Scenario builder with templates and editable variants | ✅ | 5 templates |
 | Compound growth, contributions, timing, fees, tax, inflation, nominal/real | ✅ | Closed-form tested |
 | One-off and recurring flows (incl. inflation-indexed) | ✅ | |
-| Goal progress (target reached month) | ✅ | Goals can be the target; date check badge; goals can track an account |
+| Goal progress (target reached month) | ✅ | Goals can be the target; date check badge; goals can track an account; savings plan (required monthly, finish date, probability) |
+| Net worth over time | ✅ | Reconstructed month-end balances; liquid vs total |
+| Year in review | ✅ | Year vs previous year, category changes, decisions and lessons |
 | Opportunity-cost comparison | ✅ | |
 | Sensitivity (tornado) | ✅ | |
 | Charts comparing scenarios | ✅ | With table view |

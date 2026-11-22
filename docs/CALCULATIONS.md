@@ -38,6 +38,26 @@ Every number DecisionLab shows is defined here. Code references point to the imp
 
 Header signatures pre-fill the mapping. Heartland Bank is verified against real exports; ASB, ANZ, BNZ, Westpac and Kiwibank are **unverified** (based on publicly described layouts) until checked against a real export — see [BANK_PRESETS.md](BANK_PRESETS.md). Every row is still validated, and failures are shown, not imported.
 
+## Goal savings plans (`src/engine/goals.ts`)
+
+- Months available = calendar months from the current month to the target date's month, inclusive; the balance is checked at the end of the last month.
+- **Required monthly contribution** = the smallest whole-dollar contribution for which the projection (same month step as everywhere: end-of-month contributions, return on the goal's money, tax on returns — default 17.5% — and fees) reaches the target. Found by bisection on the projection itself, so it always agrees with the Scenario Lab. With no return it is simply (target − saved) ÷ months, rounded up to dollars.
+- **Planned contribution** (optional): months to reach the target and the month it is reached; *on track* if planned ≥ required.
+- **Probability** (only when you set a volatility, i.e. the money is invested): Monte Carlo (1,000 runs, fixed seed) of reaching the target by the date at the planned contribution. Contributing exactly the required amount under volatility gives roughly a coin flip — the plan assumes average returns.
+- Default return for goal money is 3.5% (an indicative savings-account rate); set it per goal.
+
+## Net worth (`src/engine/networth.ts`)
+
+Sum of month-end balances across accounts. Each account's history is reconstructed backwards and forwards from its current balance anchor through its transactions; it contributes from the month its history starts. Credit cards contribute negative balances. Accounts with no balance at all are listed as excluded. *Liquid* sums accounts marked as liquid. Accounts without transactions (e.g. KiwiSaver entered by hand) stay at their entered value from that date.
+
+## Year in review (`src/engine/annual.ts`)
+
+Calendar-year income, spending, savings rate and net cash flow (standard definitions) compared with the previous year, the largest category changes, and decisions recorded that year (made = has a recorded choice; reviewed; average satisfaction; lessons). Years with fewer than 12 months of data are flagged as partial.
+
+## Rule health (`src/engine/ruleHealth.ts`)
+
+For each rule: *matches* (transactions its condition matches, even if disabled), *effective* (currently categorised by it), *never wins* (an earlier enabled rule matches every transaction it would match that you haven't decided yourself), and *conflicts* (transactions it matches that you categorised differently by hand or memory; flagged when conflicts ≥ effective uses).
+
 ## Decision templates (`src/engine/templates.ts`)
 
 Built-in starters (big purchase, trip, job, subscription, savings change) pre-fill alternatives and rating criteria. *Copy from a past decision* copies its criteria and weights. *You often use* lists criteria appearing in at least two of your decisions (matched by name, case-insensitive) with their most common type and direction and a starting weight = mean weight share × 10, clamped to 1–5. All of these only pre-fill; nothing is locked.

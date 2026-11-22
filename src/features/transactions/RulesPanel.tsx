@@ -4,6 +4,7 @@ import { Badge, Button, Checkbox, ConfirmButton, Field, Input, Modal, Notice, Se
 import { db } from '@/data/db';
 import { deleteRule, moveRule, reapplyCategorisation, saveRule } from '@/data/transactions';
 import { isValidRegex, ruleMatches } from '@/engine/categorise';
+import { ruleHealth, type RuleHealth } from '@/engine/ruleHealth';
 import type { CategoryRule } from '@/domain/types';
 import { useAnalytics } from '@/hooks/useAppData';
 import { useToast } from '@/ui/toast';
@@ -34,7 +35,10 @@ export function RulesPanel() {
     return analytics.transactions.filter((t) => ruleMatches(rule, t)).length;
   }, [draft, analytics.transactions]);
 
+  const health = useMemo(() => new Map((rules ? ruleHealth(rules, analytics.transactions) : []).map((h) => [h.ruleId, h])), [rules, analytics.transactions]);
+  const ruleName = (id: string | null) => rules?.find((r) => r.id === id)?.name ?? 'an earlier rule';
   if (!rules) return <Spinner />;
+  const problems = [...health.values()].filter((h) => h.status === 'shadowed' || h.status === 'conflicts').length;
   const invalid = draft?.operator === 'regex' && !isValidRegex(draft.pattern);
 
   return (
@@ -43,6 +47,11 @@ export function RulesPanel() {
         Rules run top to bottom; the first match wins. Your manual corrections (and “remember for this merchant” choices) always take precedence over
         rules. After changing rules, re-apply them to update existing transactions.
       </Notice>
+      {analytics.transactions.length > 0 && problems > 0 && (
+        <Notice tone="warn">
+          {problems} rule{problems === 1 ? '' : 's'} may need attention: they can never win (an earlier rule always matches first) or they disagree with categories you chose yourself.
+        </Notice>
+      )}
       <div className="flex flex-wrap gap-2">
         <Button variant="primary" onClick={() => setDraft({ ...blank })}>
           New rule
@@ -62,7 +71,8 @@ export function RulesPanel() {
             <span className="w-6 text-right text-muted tabular">{i + 1}</span>
             <div className="min-w-0 flex-1">
               <p className="font-medium">
-                {r.name || r.pattern} {!r.enabled && <Badge>Disabled</Badge>}
+                {r.name || r.pattern} {!r.enabled && <Badge>Disabled</Badge>}{' '}
+                {analytics.transactions.length > 0 && <HealthBadge h={health.get(r.id)} earlier={ruleName(health.get(r.id)?.shadowedBy ?? null)} category={(id) => analytics.categoryMap.get(id ?? '')?.name ?? 'Uncategorised'} />}
               </p>
               <p className="truncate text-xs text-muted">
                 {r.field} {r.operator} “{r.pattern}”{r.direction !== 'any' ? ` · money ${r.direction}` : ''} → {analytics.categoryMap.get(r.categoryId)?.name ?? 'Missing category'}
@@ -150,4 +160,28 @@ export function RulesPanel() {
       </Modal>
     </div>
   );
+}
+
+function HealthBadge({ h, earlier, category }: { h?: RuleHealth; earlier: string; category: (id: string | null) => string }) {
+  if (!h) return null;
+  switch (h.status) {
+    case 'neverMatches':
+      return <Badge title="No imported transaction matches this rule">No matches</Badge>;
+    case 'shadowed':
+      return (
+        <Badge tone="warn" title={`Every transaction it matches is matched first by “${earlier}”. Move it up or remove it.`}>
+          Never wins — “{earlier}” first
+        </Badge>
+      );
+    case 'conflicts':
+      return (
+        <Badge tone="warn" title="You categorised transactions this rule matches differently. The rule may be too broad.">
+          {h.conflicts} of your choices say {category(h.conflictCategoryId)}
+        </Badge>
+      );
+    case 'ok':
+      return <span className="text-xs font-normal text-muted">{h.effective} categorised</span>;
+    default:
+      return h.matches > 0 ? <span className="text-xs font-normal text-muted">would match {h.matches}</span> : null;
+  }
 }

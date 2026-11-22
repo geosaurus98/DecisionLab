@@ -34,4 +34,6 @@ export const DEFINITIONS = {
     'How much inflation itself is uncertain. Each simulated year draws its own inflation rate around your assumption (floored at −10%), which changes real values and any costs that grow with inflation.',
   sequenceStress:
     'The same average assumptions, but with one sudden fall at different times. When you are adding money, an early fall is less harmful because later contributions buy in cheaply; when you are drawing money out, an early fall is worse.',
+  netWorth:
+    'Sum of each account’s balance at the end of each month (credit cards count as negative). Balances are reconstructed from each account’s latest balance and its transactions, so they are only as complete as your imports. Investment or KiwiSaver accounts without transactions stay at the value you last entered.',
 } as const;

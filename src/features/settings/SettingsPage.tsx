@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Badge, Button, Card, Checkbox, ConfirmButton, Field, Input, Modal, MoneyInput, Notice, NumberInput, PageHeader, Segmented, Select, Spinner, Tabs } from '@/ui/components';
+import { Badge, Button, Card, Checkbox, ConfirmButton, Field, Input, Modal, MoneyInput, Notice, NumberInput, PageHeader, PercentInput, Segmented, Select, Spinner, Tabs } from '@/ui/components';
 import { db } from '@/data/db';
 import { deleteAccount, removeCategory, saveAccount, saveCategory } from '@/data/transactions';
 import { DEFAULT_PROFILE, SETTING_KEYS, getDefaultAssumptions, setSetting } from '@/data/settings';
@@ -19,6 +19,8 @@ import { downloadText } from '@/ui/download';
 import { AssumptionsEditor } from '../scenarios/AssumptionsEditor';
 import { goalSaved } from '@/engine/flexibility';
 import { BackupDialog, useBackupState } from './BackupDialog';
+import { GoalPlanLine } from './GoalPlan';
+import { DEFAULT_GOAL_RETURN } from '@/engine/goals';
 import { backupStatus, chooseBackupFolder, folderBackupSupported, forgetBackupFolder, setBackupState } from '@/data/backupSchedule';
 import { disableReminders, enableReminders, notificationsSupported, REMINDER_KEY, type ReminderSettings } from '@/data/reminders';
 
@@ -308,6 +310,7 @@ function GoalsCard({ goals }: { goals: Goal[] }) {
                 <div className="mt-2 h-2 rounded bg-surface-2" role="progressbar" aria-valuenow={Math.round(progress * 100)} aria-valuemin={0} aria-valuemax={100} aria-label={`${g.name} progress`}>
                   <div className="h-2 rounded bg-accent" style={{ width: `${progress * 100}%` }} />
                 </div>
+                <GoalPlanLine goal={g} saved={saved} />
               </li>
             );
           })}
@@ -362,6 +365,15 @@ function GoalsCard({ goals }: { goals: Goal[] }) {
             <div className="flex items-end pb-2">
               <Checkbox label="Earmark saved amount" checked={editing.earmarked} onChange={(v) => setEditing({ ...editing, earmarked: v })} />
             </div>
+            <Field label="Planned monthly contribution (optional)" htmlFor="g-monthly">
+              <MoneyInput id="g-monthly" value={editing.monthlyContribution ?? null} onChange={(v) => setEditing({ ...editing, monthlyContribution: v ?? undefined })} />
+            </Field>
+            <Field label="Expected return where it's saved" htmlFor="g-return" hint="e.g. 3–5% for a savings account or term deposit (before tax)">
+              <PercentInput id="g-return" min={-20} max={20} step={0.1} value={editing.annualReturn ?? DEFAULT_GOAL_RETURN} onChange={(v) => setEditing({ ...editing, annualReturn: v })} />
+            </Field>
+            <Field label="Volatility (optional)" htmlFor="g-vol" hint="0% for cash; set for investments to see the chance of reaching it">
+              <PercentInput id="g-vol" min={0} max={40} step={0.5} value={editing.annualVolatility ?? 0} onChange={(v) => setEditing({ ...editing, annualVolatility: v || undefined })} />
+            </Field>
           </div>
         )}
       </Modal>

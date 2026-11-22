@@ -205,6 +205,12 @@ export interface Goal {
   earmarked: boolean;
   /** Optional account whose (manual) balance is the amount saved so far, instead of currentAmount. */
   accountId?: Id;
+  /** Your planned monthly contribution towards the goal (optional). */
+  monthlyContribution?: Cents;
+  /** Expected annual return where the goal money is held (default: a savings-account rate). */
+  annualReturn?: number;
+  /** Annual volatility of that return, for the probability estimate (0 for cash savings). */
+  annualVolatility?: number;
   createdAt: Timestamp;
 }
 

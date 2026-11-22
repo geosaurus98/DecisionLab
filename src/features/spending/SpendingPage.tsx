@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { BudgetsCard } from './BudgetsCard';
 import { RecurringCard } from './RecurringCard';
 import { BalancesCard } from './BalancesCard';
+import { NetWorthCard } from './NetWorthCard';
 
 type Period = '3' | '6' | '12' | 'all';
 
@@ -303,6 +304,8 @@ export function SpendingPage() {
       )}
 
       <RecurringCard a={a} />
+
+      <NetWorthCard a={a} />
 
       <BalancesCard a={a} />
 

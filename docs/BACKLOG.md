@@ -22,12 +22,16 @@ Review queue (categorise by merchant; confirm/reject transfer pairs), criterion-
 
 Category suggestions in the review queue, budget history and rollover, balances rolled forward from any anchor (opening-balance prompt), decision templates and reused criteria.
 
-## Next milestone (recommended): “Goals and the long view”
+## Done in milestone 7 (“Goals and the long view”)
 
-1. **Goal-based savings plans**: the monthly contribution needed to reach a goal by its date (deterministic, and the Monte Carlo probability of making it at that rate).
-2. **Net worth over time** across accounts (from reconstructed balances), with investment accounts entered manually.
-3. **Annual review**: a yearly summary — spending by category vs last year, decisions made and how they turned out, lessons.
-4. **Rule maintenance**: show rules that never match and rules that conflict with your corrections.
+Goal savings plans (required monthly, planned finish, probability), net worth over time, year in review, rule health.
+
+## Next milestone (recommended): “Polish and everyday use”
+
+1. **Quick-add from the phone**: a minimal “add cash transaction” and “note a decision” flow tuned for the installed Android app.
+2. **Investment valuations over time** for accounts without transactions (KiwiSaver, Sharesies): a dated value history instead of one balance, feeding net worth.
+3. **Rule fixes from rule health**: one-click “move above the shadowing rule”, “narrow this rule” or “disable”.
+4. **Keyboard shortcuts and bulk edits** on the transactions table (select many → set category).
 5. **Verify other bank presets** when you have exports.
 
 ## Then
