@@ -4,6 +4,7 @@ import { AssumptionsEditor, GoalDateBadge } from '../scenarios/AssumptionsEditor
 import { ProjectionChart } from '../scenarios/ProjectionChart';
 import { Tornado } from '../scenarios/Tornado';
 import { MonteCarloPanel } from '../scenarios/MonteCarloPanel';
+import { SequenceStressCard } from '../scenarios/SequenceStress';
 import type { Decision } from '@/domain/types';
 import { compareVariants, optionToVariant, totalOptionCost, validateAssumptions } from '@/engine/projection';
 import { realDifferenceMetric, tornado } from '@/engine/sensitivity';
@@ -177,6 +178,7 @@ export function FinanceTab({ decision: d, onChange, flex }: { decision: Decision
               )}
             </Card>
           )}
+          <SequenceStressCard assumptions={d.assumptions} variants={variants} />
           <Card title="Uncertainty" description="Optional: the range of outcomes when investment returns vary. Saved with this decision and summarised in the snapshot when you record your choice.">
             <MonteCarloPanel idPrefix="dec-mc" assumptions={d.assumptions} variants={variants} config={d.monteCarlo} onChange={(monteCarlo) => onChange({ ...d, monteCarlo })} />
           </Card>

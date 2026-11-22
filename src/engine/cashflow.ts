@@ -248,6 +248,8 @@ export function findTransferPairs<T extends AnalysedTxn & { id: string; accountI
   txns: T[],
   categories: Map<string, Category>,
   windowDays = 3,
+  /** Pairs the user said are not transfers, as "outId|inId". */
+  excluded?: Set<string>,
 ): [T, T][] {
   const isTransfer = (t: T) => classify(t, categories) === 'transfer';
   const outs = txns.filter((t) => t.amount < 0 && !isTransfer(t));
@@ -263,9 +265,17 @@ export function findTransferPairs<T extends AnalysedTxn & { id: string; accountI
   const dayNum = (d: string) => Date.parse(`${d}T00:00:00Z`) / 86_400_000;
   for (const o of outs) {
     const candidates = byAmount.get(-o.amount) ?? [];
-    const match = candidates.find(
-      (i) => !used.has(i.id) && i.accountId !== o.accountId && Math.abs(dayNum(i.date) - dayNum(o.date)) <= windowDays,
-    );
+    // Closest date wins (same-day transfers are the norm), so long histories pair correctly.
+    let match: T | undefined;
+    let best = Infinity;
+    for (const i of candidates) {
+      if (used.has(i.id) || i.accountId === o.accountId || excluded?.has(`${o.id}|${i.id}`)) continue;
+      const gap = Math.abs(dayNum(i.date) - dayNum(o.date));
+      if (gap <= windowDays && gap < best) {
+        best = gap;
+        match = i;
+      }
+    }
     if (match) {
       used.add(match.id);
       pairs.push([o, match]);

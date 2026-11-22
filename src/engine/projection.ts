@@ -320,3 +320,38 @@ export function compareVariants(a: ProjectionAssumptions, variants: ScenarioVari
     vsBestReal: r.result.finalReal - bestReal,
   }));
 }
+
+// ───────────────────────── Sequence-of-returns stress test ─────────────────────────
+
+/**
+ * Final balances when a one-off market fall of `crash` (e.g. 0.3 = −30%) hits in the first,
+ * middle or last year of the horizon, with returns otherwise as assumed. With regular
+ * contributions an early fall hurts less (you keep buying cheaply); with withdrawals or a
+ * large starting balance it hurts more. Same deterministic conventions as `project`.
+ */
+export function sequenceStress(
+  a: ProjectionAssumptions,
+  variant: Pick<ScenarioVariant, 'oneOffs' | 'recurring' | 'contributionDelta'> = EMPTY_VARIANT,
+  crash = 0.3,
+): { timing: 'none' | 'early' | 'middle' | 'late'; month: number | null; finalNominal: Cents; finalReal: Cents }[] {
+  const errors = validateAssumptions(a);
+  if (errors.length) throw new Error(errors.join(' '));
+  if (!(crash > 0 && crash < 1)) throw new Error('Crash must be between 0% and 100%.');
+  const rM = monthlyRate(a.annualReturn);
+  const feeM = monthlyFeeRate(a.annualFee);
+  const inflM = monthlyRate(a.annualInflation);
+  const schedule = flowSchedule(a, variant);
+  const H = a.horizonMonths;
+  const run = (shockMonth: number | null) => {
+    let b = a.initialBalance;
+    for (let t = 0; t < H; t++) b = stepMonth(b, schedule[t]!, t === shockMonth ? -crash : rM, feeM, a.taxRateOnReturns, a.timing).balance;
+    return { finalNominal: Math.round(b), finalReal: Math.round(b / Math.pow(1 + inflM, H)) };
+  };
+  const mid = Math.floor((H - 1) / 2);
+  return [
+    { timing: 'none', month: null, ...run(null) },
+    { timing: 'early', month: 0, ...run(0) },
+    { timing: 'middle', month: mid, ...run(mid) },
+    { timing: 'late', month: H - 1, ...run(H - 1) },
+  ];
+}

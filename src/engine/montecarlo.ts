@@ -78,6 +78,9 @@ export interface MonteCarloResult {
 
 export function validateMonteCarlo(s: MonteCarloSettings): string[] {
   const errors: string[] = [];
+  if (s.crashProbability !== undefined && !(s.crashProbability >= 0 && s.crashProbability <= 0.5)) errors.push('Crash probability must be between 0% and 50% a year.');
+  if (s.crashSize !== undefined && !(s.crashSize >= 0 && s.crashSize < 0.95)) errors.push('Crash size must be between 0% and 95%.');
+  if (s.inflationVolatility !== undefined && !(s.inflationVolatility >= 0 && s.inflationVolatility <= 0.2)) errors.push('Inflation volatility must be between 0% and 20%.');
   if (!(s.annualVolatility >= 0) || s.annualVolatility > 1) errors.push('Volatility must be between 0% and 100%.');
   if (!Number.isInteger(s.runs) || s.runs < 100 || s.runs > MAX_RUNS) errors.push(`Runs must be a whole number between 100 and ${MAX_RUNS.toLocaleString()}.`);
   if (!Number.isInteger(s.seed) || s.seed < 0 || s.seed > 0xffffffff) errors.push('Seed must be a whole number between 0 and 4294967295.');
@@ -120,39 +123,72 @@ export function simulate(
   const feeM = monthlyFeeRate(a.annualFee);
   const inflM = monthlyRate(a.annualInflation);
   const params = logReturnParams(a.annualReturn, settings.annualVolatility);
-  const schedules = variants.map((v) => flowSchedule(a, v));
-  const totalFlows = schedules.map((s) => s.reduce((x, y) => x + y, 0));
+  // Flows split into a fixed part and inflation-indexed recurring flows, which depend on each
+  // path's inflation when inflation is uncertain.
+  const fixedSchedules = variants.map((v) => flowSchedule(a, { ...v, recurring: v.recurring.filter((r) => !r.inflationIndexed) }));
+  const indexedFlows = variants.map((v) => v.recurring.filter((r) => r.inflationIndexed));
+  const totalFlows = variants.map((v) => flowSchedule(a, v).reduce((x, y) => x + y, 0));
   const samples = sampleMonths(H);
   const sampleIndex = new Int32Array(H).fill(-1);
   samples.forEach((t, i) => (sampleIndex[t] = i));
   const V = variants.length;
   const S = samples.length;
 
-  // nominal[v][sample * runs + run]
+  // nominal / real values: [v][sample * runs + run]
   const nominal = variants.map(() => new Float64Array(S * runs));
+  const real = variants.map(() => new Float64Array(S * runs));
   const reachedAnyTime = variants.map(() => new Uint8Array(runs));
   const shortfall = variants.map(() => new Uint8Array(runs));
-  const deflators = new Float64Array(H);
-  for (let t = 0; t < H; t++) deflators[t] = Math.pow(1 + inflM, t + 1);
 
-  const normal = normalGenerator(mulberry32(settings.seed));
+  const rng = mulberry32(settings.seed);
+  const normal = normalGenerator(rng);
   const monthlyRates = new Float64Array(H);
+  const index = new Float64Array(H + 1); // price index at the start of each month (index[0] = 1)
   const balances = new Float64Array(V);
 
+  // Crash risk: with monthly probability p the log return gets an extra ln(1 − C). The normal
+  // part's mean is raised by −ln(1 − pC) so the expected gross return is unchanged.
+  const crashP = settings.crashProbability ? 1 - Math.pow(1 - settings.crashProbability, 1 / 12) : 0;
+  const crashC = settings.crashSize ?? 0;
+  const crashOn = crashP > 0 && crashC > 0;
+  const crashLog = crashOn ? Math.log(1 - crashC) : 0;
+  const mu = params.monthlyMean - (crashOn ? Math.log(1 - crashP * crashC) : 0);
+  const inflSd = settings.inflationVolatility ?? 0;
+  const deterministicRate = monthlyRate(a.annualReturn);
+
   for (let r = 0; r < runs; r++) {
-    // Draw one return path, shared by every variant (common random numbers).
+    // One return path (and inflation path), shared by every variant (common random numbers).
     for (let t = 0; t < H; t++) {
-      monthlyRates[t] = settings.annualVolatility === 0 ? monthlyRate(a.annualReturn) : Math.exp(params.monthlyMean + params.monthlySd * normal()) - 1;
+      if (settings.annualVolatility === 0 && !crashOn) {
+        monthlyRates[t] = deterministicRate;
+        continue;
+      }
+      let x = mu + params.monthlySd * normal();
+      if (crashOn && rng() < crashP) x += crashLog;
+      monthlyRates[t] = Math.exp(x) - 1;
+    }
+    index[0] = 1;
+    let yearInfl = inflM;
+    for (let t = 0; t < H; t++) {
+      if (inflSd > 0 && t % 12 === 0) yearInfl = monthlyRate(Math.max(-0.1, a.annualInflation + inflSd * normal()));
+      index[t + 1] = index[t]! * (1 + (inflSd > 0 ? yearInfl : inflM));
     }
     balances.fill(a.initialBalance);
     for (let t = 0; t < H; t++) {
       const si = sampleIndex[t]!;
       for (let v = 0; v < V; v++) {
-        const b = stepMonth(balances[v]!, schedules[v]![t]!, monthlyRates[t]!, feeM, a.taxRateOnReturns, a.timing).balance;
+        let flows = fixedSchedules[v]![t]!;
+        for (const f of indexedFlows[v]!) {
+          if (t >= f.startMonth && (f.endMonth === undefined || t <= f.endMonth)) flows += (f.monthlyAmount * index[t]!) / index[f.startMonth]!;
+        }
+        const b = stepMonth(balances[v]!, flows, monthlyRates[t]!, feeM, a.taxRateOnReturns, a.timing).balance;
         balances[v] = b;
         if (b < 0) shortfall[v]![r] = 1;
         if (a.targetAmount !== undefined && b >= a.targetAmount) reachedAnyTime[v]![r] = 1;
-        if (si >= 0) nominal[v]![si * runs + r] = b;
+        if (si >= 0) {
+          nominal[v]![si * runs + r] = b;
+          real[v]![si * runs + r] = b / index[t + 1]!;
+        }
       }
     }
   }
@@ -163,17 +199,20 @@ export function simulate(
   const out: VariantDistribution[] = variants.map((variant, v) => {
     const fan: FanPoint[] = samples.map((t, si) => {
       const nom = nominal[v]!.slice(si * runs, (si + 1) * runs);
+      const rl = real[v]!.slice(si * runs, (si + 1) * runs);
       let sumN = 0;
-      for (const x of nom) sumN += x;
-      const real = nom.map((x) => x / deflators[t]!);
-      const sumR = sumN / deflators[t]!;
+      let sumR = 0;
+      for (let i = 0; i < runs; i++) {
+        sumN += nom[i]!;
+        sumR += rl[i]!;
+      }
       nom.sort();
-      real.sort();
-      return { t, nominal: summarise(nom, sumN), real: summarise(real, sumR) };
+      rl.sort();
+      return { t, nominal: summarise(nom, sumN), real: summarise(rl, sumR) };
     });
     const finalNom = nominal[v]!.slice(lastSample * runs, (lastSample + 1) * runs);
     finalsNominalRaw.push(finalNom);
-    const finalReal = finalNom.map((x) => x / deflators[H - 1]!);
+    const finalReal = real[v]!.slice(lastSample * runs, (lastSample + 1) * runs);
     finalsReal.push(finalReal);
     const sortedReal = finalReal.slice().sort();
     let atTarget = 0;

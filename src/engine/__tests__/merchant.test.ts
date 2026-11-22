@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normaliseMerchant } from '../merchant';
+import { merchantLabel, normaliseMerchant } from '../merchant';
 
 describe('normaliseMerchant', () => {
   it('strips card numbers, dates and payment prefixes', () => {
@@ -12,5 +12,12 @@ describe('normaliseMerchant', () => {
   });
   it('never returns an empty key', () => {
     expect(normaliseMerchant('12/03')).toBe('12/03');
+  });
+});
+
+describe('merchantLabel', () => {
+  it('title-cases words but keeps short tokens (AA, NZ) upper-case', () => {
+    expect(merchantLabel('AA AUTO SERVICE NEWTOWN NZ')).toBe('AA Auto Service Newtown NZ');
+    expect(merchantLabel('Z ENERGY 2')).toBe('Z Energy 2');
   });
 });

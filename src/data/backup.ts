@@ -84,6 +84,9 @@ export type BackupFile = z.infer<typeof backupSchema>;
 export async function exportBackup(): Promise<BackupFile> {
   const data: Record<string, unknown[]> = {};
   for (const name of TABLE_NAMES) data[name] = await db.table(name).toArray();
+  // Device-specific values never leave this browser: a folder handle cannot be serialised and
+  // the backup schedule describes this device.
+  data.settings = (data.settings as { key: string }[]).filter((r) => r.key !== 'backupFolderHandle' && r.key !== 'backupState');
   return { format: BACKUP_FORMAT, version: BACKUP_VERSION, exportedAt: new Date().toISOString(), data };
 }
 

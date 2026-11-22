@@ -121,6 +121,37 @@ export function MonteCarloPanel({ assumptions, variants, config, onChange, idPre
       </div>
 
       {cfg.enabled && (
+        <details className="rounded-lg border border-border px-3 py-2">
+          <summary className="cursor-pointer text-sm font-medium">More risk options (crash risk, uncertain inflation)</summary>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <Field
+              label={
+                <span className="inline-flex items-center gap-1">
+                  Crash probability per year <InfoTip>{DEFINITIONS.crashRisk}</InfoTip>
+                </span>
+              }
+              htmlFor={`${idPrefix}-crashp`}
+            >
+              <PercentInput id={`${idPrefix}-crashp`} min={0} max={50} step={1} value={cfg.crashProbability ?? 0} onChange={(v) => set({ crashProbability: v })} />
+            </Field>
+            <Field label="Crash size" htmlFor={`${idPrefix}-crashc`} hint="Fall in investment value when a crash happens">
+              <PercentInput id={`${idPrefix}-crashc`} min={0} max={90} step={5} value={cfg.crashSize ?? 0.3} onChange={(v) => set({ crashSize: v })} />
+            </Field>
+            <Field
+              label={
+                <span className="inline-flex items-center gap-1">
+                  Inflation volatility <InfoTip>{DEFINITIONS.inflationVolatility}</InfoTip>
+                </span>
+              }
+              htmlFor={`${idPrefix}-inflvol`}
+            >
+              <PercentInput id={`${idPrefix}-inflvol`} min={0} max={20} step={0.5} value={cfg.inflationVolatility ?? 0} onChange={(v) => set({ inflationVolatility: v })} />
+            </Field>
+          </div>
+        </details>
+      )}
+
+      {cfg.enabled && (
         <>
           <Notice tone="warn" title="Illustrative, not a forecast">
             These ranges show how outcomes vary <em>if</em> returns behave like independent random draws with the mean and volatility above. Real markets
@@ -267,6 +298,9 @@ export function MonteCarloPanel({ assumptions, variants, config, onChange, idPre
               />
               <p className="mt-2 text-xs text-muted">
                 {result.runs.toLocaleString()} runs · seed {result.settings.seed} · expected return {formatPercent(assumptions.annualReturn)} ± {formatPercent(result.settings.annualVolatility)} a year
+                {(result.settings.crashProbability ?? 0) > 0 && (result.settings.crashSize ?? 0) > 0 &&
+                  ` · ${formatPercent(result.settings.crashProbability!, 0)}/yr chance of a ${formatPercent(result.settings.crashSize!, 0)} crash`}
+                {(result.settings.inflationVolatility ?? 0) > 0 && ` · inflation ${formatPercent(assumptions.annualInflation)} ± ${formatPercent(result.settings.inflationVolatility!)}`}
                 {ms !== null && ` · computed in ${Math.round(ms)} ms`}. The extreme 0.5% at each end is trimmed from the histogram.
               </p>
             </div>

@@ -30,6 +30,8 @@ DecisionLab holds sensitive personal financial data, so privacy is a core design
 - **Encrypted backup (recommended)**: AES-256-GCM, key derived from your passphrase with PBKDF2-HMAC-SHA-256, 600,000 iterations, random 16-byte salt and 12-byte IV per backup (Web Crypto API). GCM authentication means a wrong passphrase or tampered file fails cleanly. There is no recovery if you forget the passphrase. Strength depends entirely on the passphrase: use a long, unique one.
 - **Plain backup**: readable JSON containing everything. Treat it like a bank statement.
 - Restores validate the whole file before replacing anything and run in one database transaction.
+- **Reminders and one-click backups**: the Overview reminds you when a backup is due (default every 14 days). Backups are only created when you click. The passphrase is never stored; you may keep it in memory until the tab closes.
+- **Backup folder** (desktop Chrome/Edge): you can choose a folder — for example one synced by your cloud drive — and backups are written there. The browser remembers permission for that folder only; the folder handle and backup schedule are device-only and excluded from backup files. Anything synced to a cloud drive is only as private as that service, which is why encryption is on by default.
 
 ## Safe CSV processing
 

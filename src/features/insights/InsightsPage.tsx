@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Badge, Card, EmptyState, Metric, Notice, PageHeader, Spinner } from '@/ui/components';
+import { Badge, Card, EmptyState, InfoTip, Metric, Notice, PageHeader, Spinner } from '@/ui/components';
+import { DEFINITIONS } from '@/ui/definitions';
 import { SimpleTable } from '@/ui/charts';
 import { db } from '@/data/db';
-import { calibrate, MIN_SAMPLE_FOR_PATTERN } from '@/engine/insights';
+import { calibrate, criterionInsights, MIN_CRITERION_SAMPLE, MIN_SAMPLE_FOR_PATTERN, type CriterionInsight } from '@/engine/insights';
 import { formatPercent } from '@/domain/money';
 import { useAnalytics } from '@/hooks/useAppData';
 import { comparePeriods } from '@/engine/cashflow';
@@ -16,6 +17,7 @@ export function InsightsPage() {
   const decisions = useLiveQuery(() => db.decisions.toArray(), []);
   const a = useAnalytics();
   const cal = useMemo(() => (decisions ? calibrate(decisions) : null), [decisions]);
+  const criteria = useMemo(() => (decisions ? criterionInsights(decisions) : []), [decisions]);
   const behaviour = useMemo(() => {
     if (a.completeMonths.length < 6) return null;
     const end = a.lastComplete;
@@ -101,6 +103,32 @@ export function InsightsPage() {
               />
             </Card>
           </div>
+          <Card
+            title={
+              <span className="inline-flex items-center gap-2">
+                Which criteria predicted your satisfaction? <InfoTip>{DEFINITIONS.criterionInsight}</InfoTip>
+              </span>
+            }
+            description={`For criteria you have reused across reviewed decisions. Patterns are only interpreted from ${MIN_CRITERION_SAMPLE} decisions upwards, and even then they are associations, not proof.`}
+          >
+            {criteria.length === 0 ? (
+              <p className="text-sm text-ink-2">No reviewed decisions with criteria yet.</p>
+            ) : (
+              <SimpleTable
+                headers={['Criterion', 'Decisions', 'Average weight', 'Rank correlation', 'Reading']}
+                align={['left', 'right', 'right', 'right', 'left']}
+                rows={criteria.map((c) => [
+                  c.name,
+                  c.n,
+                  formatPercent(c.meanWeight, 0),
+                  c.rho === null ? '—' : c.rho.toFixed(2),
+                  <span key="r" className={c.reading ? '' : 'text-muted'}>
+                    {readingText(c)}
+                  </span>,
+                ])}
+              />
+            )}
+          </Card>
           <div className="grid gap-5 lg:grid-cols-2">
             <Card title="Highest satisfaction">
               {best.length === 0 ? (
@@ -154,4 +182,20 @@ export function InsightsPage() {
       </Card>
     </div>
   );
+}
+
+function readingText(c: CriterionInsight): string {
+  if (c.n < MIN_CRITERION_SAMPLE) return `Needs ${MIN_CRITERION_SAMPLE - c.n} more reviewed decision${MIN_CRITERION_SAMPLE - c.n === 1 ? '' : 's'}`;
+  switch (c.reading) {
+    case 'predictive':
+      return 'Higher scores went with higher satisfaction';
+    case 'underweighted':
+      return 'Went with satisfaction, but you weight it lightly — worth more weight?';
+    case 'weightedButNotPredictive':
+      return 'You weight it heavily, but it didn’t track satisfaction';
+    case 'notPredictive':
+      return 'No clear link to satisfaction';
+    default:
+      return 'Not computable (scores or satisfaction never varied)';
+  }
 }

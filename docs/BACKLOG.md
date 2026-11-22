@@ -14,18 +14,22 @@ Category budgets with pace tracking and suggestions, budgets in the flexibility 
 
 Bank CSV presets with header detection (unverified), statement balance reading with reconciliation and balance history, editable recurring payments (confirm/rename/amount/dismiss), upcoming bills, bills before next pay in the flexibility estimate, bill-aware budget pace, component tests and an automated axe audit.
 
-## Next milestone (recommended): “Verify and learn”
+## Done in milestone 5 (“Verify and learn”)
 
-1. **Verify the remaining bank presets** (Heartland is done) if you have accounts elsewhere — see BANK_PRESETS.md.
-2. **Criterion-level preference insights**: which criteria and weights best predicted satisfaction (shown only with ≥ 10 reviews, with uncertainty).
-3. **Monte Carlo extensions**: historical bootstrap / fat-tailed returns, uncertain inflation, sequence-of-returns stress test.
-4. **Automatic encrypted backups** to a user-chosen folder (File System Access API on desktop) with reminders.
-5. **Performance**: virtualised transaction table and analytics in a worker for 50k+ transactions.
+Review queue (categorise by merchant; confirm/reject transfer pairs), criterion-level insights, Monte Carlo crash risk and uncertain inflation, sequence-of-returns stress test, backup reminders with one-click encrypted backups and optional backup folder, performance benchmark and guard at 50k transactions.
+
+## Next milestone (recommended): “Smarter categorisation and planning”
+
+1. **Category suggestions in the review queue** from similar merchants you have already categorised (token overlap), shown as one-click suggestions — never applied silently.
+2. **Budget history**: planned vs actual per category by month, with optional rollover of unspent discretionary budget.
+3. **Opening balance prompt** for accounts without statement balances, so balance history works everywhere.
+4. **Verify other bank presets** when you have exports from ASB, ANZ, BNZ, Westpac or Kiwibank.
+5. **Decision templates** (e.g. “big purchase”, “trip”, “job offer”) with suggested criteria, built from your own past decisions.
 
 ## Then
 
-6. Category-level budget history (planned vs actual by month) and budget rollover.
-7. Opening-balance prompt for accounts without a balance column, to enable balance history everywhere.
+6. Monte Carlo: historical bootstrap of returns once a reliable, licence-compatible NZ return series is chosen.
+7. Goal-based savings plans (required monthly contribution to reach a goal by its date, deterministic and with Monte Carlo probability).
 
 ## Later / optional
 
@@ -37,6 +41,6 @@ Bank CSV presets with header detection (unverified), statement balance reading w
 ## Technical debt / quality
 
 - More component tests (decision editor tabs, settings forms).
-- Web Worker for heavy analytics if transaction counts grow large; virtualised transaction table.
+- Virtualised transaction table if paging 100 rows ever feels slow; analytics in a worker only if benchmarks on phones show a need.
 - Manual screen-reader pass (NVDA/TalkBack); keyboard reordering of rules; axe audit of open dialogs.
 - Rule performance: precompile and cache per import (currently fine for thousands of rows).

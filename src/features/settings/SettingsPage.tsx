@@ -18,6 +18,8 @@ import { useToast } from '@/ui/toast';
 import { downloadText } from '@/ui/download';
 import { AssumptionsEditor } from '../scenarios/AssumptionsEditor';
 import { goalSaved } from '@/engine/flexibility';
+import { BackupDialog, useBackupState } from './BackupDialog';
+import { backupStatus, chooseBackupFolder, folderBackupSupported, forgetBackupFolder, setBackupState } from '@/data/backupSchedule';
 import { disableReminders, enableReminders, notificationsSupported, REMINDER_KEY, type ReminderSettings } from '@/data/reminders';
 
 type Tab = 'accounts' | 'planning' | 'categories' | 'data' | 'appearance';
@@ -458,6 +460,7 @@ function DataSection() {
       } else {
         downloadText(`decisionlab-${stamp}.decisionlab-backup.json`, JSON.stringify(backup, null, 1));
       }
+      await setBackupState({ lastBackupAt: new Date().toISOString() });
       toast({ message: 'Backup downloaded.', tone: 'good' });
     } catch (e) {
       toast({ message: e instanceof Error ? e.message : 'Export failed.', tone: 'bad' });
@@ -501,6 +504,8 @@ function DataSection() {
           </li>
         </ul>
       </Card>
+
+      <BackupScheduleCard />
 
       <Card title="Back up" description="Download a copy of all your data. Encrypted backups use AES-256-GCM with a key derived from your passphrase (PBKDF2, 600,000 iterations).">
         <div className="grid gap-3 sm:grid-cols-2">
@@ -652,5 +657,65 @@ function AppearanceSection() {
       />
     </Card>
     </div>
+  );
+}
+
+function BackupScheduleCard() {
+  const state = useBackupState();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const { daysSince } = backupStatus(state, todayIso(), true);
+  return (
+    <Card
+      title="Backup reminders"
+      description="DecisionLab reminds you on the Overview when a backup is due. Backups are created only when you click — nothing happens in the background."
+      actions={
+        <Button variant="primary" size="sm" onClick={() => setOpen(true)}>
+          Back up now
+        </Button>
+      }
+    >
+      <div className="grid gap-3 text-sm sm:grid-cols-2">
+        <p>
+          Last backup: <strong>{daysSince === null ? 'never' : daysSince === 0 ? 'today' : `${daysSince} day${daysSince === 1 ? '' : 's'} ago`}</strong>
+        </p>
+        <Field label="Remind me after" htmlFor="bk-interval">
+          <Select id="bk-interval" value={state.intervalDays} onChange={(e) => setBackupState({ intervalDays: Number(e.target.value) })}>
+            <option value={7}>7 days</option>
+            <option value={14}>14 days</option>
+            <option value={30}>30 days</option>
+            <option value={0}>Never remind me</option>
+          </Select>
+        </Field>
+        <div className="sm:col-span-2">
+          {folderBackupSupported() ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span>{state.folderName ? <>Backups are saved to the folder “{state.folderName}”.</> : 'Backups are downloaded. You can choose a folder (e.g. a synced cloud folder) instead.'}</span>
+              <Button
+                size="sm"
+                onClick={async () => {
+                  try {
+                    const name = await chooseBackupFolder();
+                    if (name) toast({ message: `Backups will be saved to “${name}”.`, tone: 'good' });
+                  } catch {
+                    /* user cancelled the picker */
+                  }
+                }}
+              >
+                {state.folderName ? 'Change folder' : 'Choose folder'}
+              </Button>
+              {state.folderName && (
+                <Button size="sm" variant="ghost" onClick={() => forgetBackupFolder()}>
+                  Use downloads instead
+                </Button>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-muted">This browser can’t save to a chosen folder, so backups are downloaded.</p>
+          )}
+        </div>
+      </div>
+      <BackupDialog open={open} onClose={() => setOpen(false)} />
+    </Card>
   );
 }

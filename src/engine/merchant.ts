@@ -60,6 +60,6 @@ export function merchantLabel(key: string): string {
   return key
     .toLowerCase()
     .split(' ')
-    .map((w) => (w.length <= 2 && /\d/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+    .map((w) => (w.length <= 2 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
     .join(' ');
 }

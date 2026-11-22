@@ -45,3 +45,39 @@ export function mad(values: number[]): number {
   const m = median(values);
   return median(values.map((v) => Math.abs(v - m)));
 }
+
+/** Ranks (1-based) with ties given their average rank. */
+export function ranks(values: number[]): number[] {
+  const order = values.map((v, i) => [v, i] as const).sort((a, b) => a[0] - b[0]);
+  const out = new Array<number>(values.length);
+  for (let i = 0; i < order.length; ) {
+    let j = i;
+    while (j + 1 < order.length && order[j + 1]![0] === order[i]![0]) j++;
+    const avg = (i + j) / 2 + 1;
+    for (let k = i; k <= j; k++) out[order[k]![1]] = avg;
+    i = j + 1;
+  }
+  return out;
+}
+
+/** Pearson correlation; null if either variable is constant or n < 3. */
+export function pearson(x: number[], y: number[]): number | null {
+  const n = x.length;
+  if (n < 3 || y.length !== n) return null;
+  const mx = mean(x);
+  const my = mean(y);
+  let sxy = 0;
+  let sxx = 0;
+  let syy = 0;
+  for (let i = 0; i < n; i++) {
+    sxy += (x[i]! - mx) * (y[i]! - my);
+    sxx += (x[i]! - mx) ** 2;
+    syy += (y[i]! - my) ** 2;
+  }
+  return sxx === 0 || syy === 0 ? null : sxy / Math.sqrt(sxx * syy);
+}
+
+/** Spearman rank correlation (Pearson on tie-averaged ranks). */
+export function spearman(x: number[], y: number[]): number | null {
+  return pearson(ranks(x), ranks(y));
+}

@@ -114,3 +114,47 @@ describe('helpers', () => {
     expect(h.reduce((a, b) => a + b.count, 0)).toBe(1000);
   });
 });
+
+import { sequenceStress } from '../projection';
+
+describe('crash risk and uncertain inflation', () => {
+  const lump: ProjectionAssumptions = { ...base, monthlyContribution: 0, annualFee: 0, taxRateOnReturns: 0, horizonMonths: 60 };
+  it('keeps the expected outcome while fattening the downside', () => {
+    const plain = simulate(lump, [keep], { annualVolatility: 0.12, runs: 20_000, seed: 5 }).variants[0]!.finalNominal;
+    const crashy = simulate(lump, [keep], { annualVolatility: 0.12, runs: 20_000, seed: 5, crashProbability: 0.1, crashSize: 0.3 }).variants[0]!.finalNominal;
+    const det = project(lump).finalNominal;
+    expect(Math.abs(crashy.mean - det) / det).toBeLessThan(0.02);
+    expect(crashy.p10).toBeLessThan(plain.p10);
+  });
+
+  it('with uncertain inflation, real values spread wider and indexed costs vary by path', () => {
+    const fixed = simulate(base, [keep], { annualVolatility: 0, runs: 500, seed: 9 }).variants[0]!;
+    const uncertain = simulate(base, [keep], { annualVolatility: 0, runs: 500, seed: 9, inflationVolatility: 0.02 }).variants[0]!;
+    expect(fixed.finalReal.p90 - fixed.finalReal.p10).toBe(0);
+    expect(uncertain.finalReal.p90 - uncertain.finalReal.p10).toBeGreaterThan(0);
+    expect(uncertain.finalNominal.p90 - uncertain.finalNominal.p10).toBe(0); // nominal unaffected without indexed flows
+    const sub: ScenarioVariant = { ...keep, id: 'sub', recurring: [{ id: 'r', label: 'Sub', startMonth: 0, monthlyAmount: -10_000, inflationIndexed: true }] };
+    const withIndexed = simulate(base, [sub], { annualVolatility: 0, runs: 500, seed: 9, inflationVolatility: 0.02 }).variants[0]!;
+    expect(withIndexed.finalNominal.p90 - withIndexed.finalNominal.p10).toBeGreaterThan(0);
+    // With zero inflation volatility, indexed flows match the deterministic engine exactly.
+    expect(Math.abs(simulate(base, [sub], { annualVolatility: 0, runs: 100, seed: 1 }).variants[0]!.finalNominal.p50 - project(base, sub).finalNominal)).toBeLessThanOrEqual(1);
+  });
+
+  it('validates the new settings', () => {
+    expect(validateMonteCarlo({ annualVolatility: 0.1, runs: 1000, seed: 1, crashProbability: 0.9, crashSize: 1, inflationVolatility: 0.5 })).toHaveLength(3);
+  });
+});
+
+describe('sequenceStress', () => {
+  it('shows that crash timing matters: early hurts a lump sum less when contributions continue, late hurts more', () => {
+    const contributing = { ...base, initialBalance: 0, monthlyContribution: 100_000, annualFee: 0, taxRateOnReturns: 0, timing: 'start' as const };
+    const r = Object.fromEntries(sequenceStress(contributing).map((x) => [x.timing, x.finalNominal]));
+    expect(r.early).toBeGreaterThan(r.late!);
+    expect(r.none).toBeGreaterThan(r.early!);
+    const lumpOnly = { ...base, monthlyContribution: 0, annualFee: 0, taxRateOnReturns: 0 };
+    const l = Object.fromEntries(sequenceStress(lumpOnly).map((x) => [x.timing, x.finalNominal]));
+    // A lump sum with no flows: timing doesn't change the final value (multiplication commutes).
+    expect(Math.abs(l.early! - l.late!)).toBeLessThanOrEqual(1);
+    expect(() => sequenceStress(base, undefined, 1.5)).toThrow();
+  });
+});

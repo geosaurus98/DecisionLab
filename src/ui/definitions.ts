@@ -26,4 +26,12 @@ export const DEFINITIONS = {
     'For each simulated path, both alternatives experience the same market returns, so the difference isolates the effect of the decision itself. Percentiles are taken across paths.',
   budget:
     'Your planned monthly spending per category (entered by you). Actual spending is net of refunds and counts split parts in their own categories. In the current month, the plan expects recurring bills on their due dates and the rest of the budget spread evenly; “ahead of pace” means spending is more than 10% above that.',
+  criterionInsight:
+    'Spearman rank correlation, across reviewed decisions that used this criterion, between how well the option you chose scored on it (normalised 0–1) and your satisfaction afterwards. +1: higher scores always went with higher satisfaction; 0: no relationship. With few decisions the number is very noisy, so readings appear only from 10 decisions; ≥ 0.3 is treated as a link.',
+  crashRisk:
+    'Adds occasional sudden falls on top of ordinary ups and downs: each month there is a small chance of the investment value dropping by the crash size. Ordinary returns are nudged up so the expected (average) outcome is unchanged — crashes widen the bad tail rather than lowering the average.',
+  inflationVolatility:
+    'How much inflation itself is uncertain. Each simulated year draws its own inflation rate around your assumption (floored at −10%), which changes real values and any costs that grow with inflation.',
+  sequenceStress:
+    'The same average assumptions, but with one sudden fall at different times. When you are adding money, an early fall is less harmful because later contributions buy in cheaply; when you are drawing money out, an early fall is worse.',
 } as const;

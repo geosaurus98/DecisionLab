@@ -97,11 +97,14 @@ try {
   ok('re-importing the same file finds 33 duplicates');
 
   // 2. Categorise: the unknown merchant is uncategorised; teach it once for all months
-  await expectText('to review');
-  const select = page.getByLabel('Category for TEST KITCHEN LTD').first();
-  await select.selectOption({ label: 'Eating out' });
-  await expectText('applied to 3 other');
-  ok('manual correction remembered and applied to the same merchant');
+  await page.getByRole('button', { name: 'Review them merchant by merchant' }).click();
+  await expectText('Uncategorised, by merchant (1 merchants, 4 transactions)');
+  await page.getByLabel('Category for Test Kitchen Ltd').selectOption({ label: 'Eating out' });
+  await expectText('4 “Test Kitchen Ltd” transactions → Eating out');
+  await page.getByRole('button', { name: 'Also make a rule' }).click();
+  await expectText('Rule created: merchant contains “test kitchen ltd”');
+  await expectText('Nothing to review');
+  ok('review queue: one choice categorised all 4 transactions from a merchant, plus a rule for future ones');
   await snap('transactions');
 
   // 3. Analyse
@@ -150,6 +153,16 @@ try {
   await expectText('$6,000.00');
   await expectText('From your imported statement, as of 2026-11-01');
   await expectText('$11,818.40'); // $6,000 entered + $5,818.40 from the statement
+
+  await expectText('You haven’t backed up yet');
+  await page.getByRole('button', { name: 'Back up now' }).click();
+  await page.fill('#bkd-pass', 'correct horse battery staple');
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Back up', exact: true }).click()]);
+  if (!/decisionlab-\d{4}-\d{2}-\d{2}\.decisionlab-backup\.enc\.json$/.test(download.suggestedFilename())) throw new Error(`unexpected backup name ${download.suggestedFilename()}`);
+  const content = await (await download.createReadStream()).toArray();
+  if (Buffer.concat(content).toString().includes('ACME')) throw new Error('backup is not encrypted');
+  await page.getByText('You haven’t backed up yet').waitFor({ state: 'detached' });
+  ok('one-click encrypted backup downloaded; the reminder clears');
   ok('flexibility uses the entered balance (Manual) and the statement balance (Known)');
   await snap('overview');
 

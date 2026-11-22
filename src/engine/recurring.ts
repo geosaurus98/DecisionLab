@@ -70,10 +70,16 @@ export function detectRecurring(
   const results: RecurringSeries[] = [];
   for (const [key, group] of groups) {
     if (group.length < minOcc) continue;
+    // Quick rejection before any sorting: a series needs at least minOcc distinct days.
+    if (new Set(group.map((t) => t.date)).size < minOcc) continue;
     const sorted = [...group].sort((a, b) => a.date.localeCompare(b.date));
     // Collapse same-day duplicates (e.g. split payments) by summing them.
     const byDay = new Map<IsoDate, RecurringInput[]>();
-    for (const t of sorted) byDay.set(t.date, [...(byDay.get(t.date) ?? []), t]);
+    for (const t of sorted) {
+      const day = byDay.get(t.date);
+      if (day) day.push(t);
+      else byDay.set(t.date, [t]);
+    }
     const days = [...byDay.keys()];
     if (days.length < minOcc) continue;
     const intervals = days.slice(1).map((d, i) => daysBetween(days[i]!, d));

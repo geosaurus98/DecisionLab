@@ -230,3 +230,23 @@ export async function unlinkTransactions(txnIds: string[]): Promise<void> {
     await Promise.all(txnIds.map((id) => db.transactions.update(id, { decisionId: undefined, updatedAt: now })));
   });
 }
+
+// ── Transfer pair review ──
+
+/** Mark pairs (outflow id, inflow id) as transfers between your own accounts. */
+export async function confirmTransferPairs(pairs: [string, string][]): Promise<void> {
+  await db.transaction('rw', db.transactions, async () => {
+    const now = nowTimestamp();
+    for (const [o, i] of pairs) {
+      for (const id of [o, i]) await db.transactions.update(id, { categoryId: 'cat-transfers', categorySource: 'manual', ruleId: undefined, updatedAt: now });
+    }
+  });
+}
+
+/** Remember that these pairs are not transfers, so they are not suggested again. */
+export async function rejectTransferPairs(keys: string[]): Promise<void> {
+  const rec = await db.settings.get('rejectedTransferPairs');
+  const existing = new Set((rec?.value as string[] | undefined) ?? []);
+  for (const k of keys) existing.add(k);
+  await db.settings.put({ key: 'rejectedTransferPairs', value: [...existing] });
+}

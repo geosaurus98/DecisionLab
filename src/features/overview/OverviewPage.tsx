@@ -10,6 +10,7 @@ import { DEFINITIONS } from '@/ui/definitions';
 import { useToast } from '@/ui/toast';
 import { FlexibilityPanel } from './FlexibilityPanel';
 import { UpcomingBillsCard } from '../spending/RecurringCard';
+import { BackupReminder } from '../settings/BackupDialog';
 import { STATUS_LABEL } from '../decisions/labels';
 
 export function OverviewPage() {
@@ -44,6 +45,8 @@ export function OverviewPage() {
           </>
         }
       />
+
+      <BackupReminder hasData={hasData} />
 
       {!hasData && (
         <Card title="Get started">

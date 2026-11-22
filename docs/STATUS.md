@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated: November 2026 — milestone 1 (foundation + vertical slice) milestones 2 (“Uncertainty and reality”), 3 (“Decide with less friction”) and 4 (“Real-world data”: bank presets, statement balances and reconciliation, editable recurring payments, upcoming bills, bill-aware budget pace, component tests and accessibility audit).
+Last updated: November 2026 — milestone 1 (foundation + vertical slice) milestones 2 (“Uncertainty and reality”), 3 (“Decide with less friction”) 4 (“Real-world data”) and 5 (“Verify and learn”: review queue, criterion-level insights, Monte Carlo crash risk and uncertain inflation, sequence stress test, backup reminders and folder backups, performance at 50k transactions).
 
 Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 
@@ -14,8 +14,8 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Local persistence (Dexie/IndexedDB) | ✅ | Versioned schema, persistent-storage request |
 | Shared domain models | ✅ | `src/domain/types.ts` |
 | Synthetic demonstration dataset | ✅ | Seeded, loaded through the real import pipeline, labelled, removable |
-| Testing infrastructure | ✅ | Vitest (170 tests incl. component tests) + Playwright E2E (23 steps) + axe audit |
-| Export/import (backup/restore), encrypted backup | ✅ | zod-validated, AES-GCM |
+| Testing infrastructure | ✅ | Vitest (188 tests incl. component and 50k-row performance tests) + Playwright E2E (24 steps) + axe audit |
+| Export/import (backup/restore), encrypted backup | ✅ | zod-validated, AES-GCM; reminders, one-click backup, optional backup folder |
 | PWA / offline | 🟡 | Manifest + service worker caching the app shell; install prompt UX not customised |
 
 ## Phase 2 — SpendLens
@@ -28,6 +28,7 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Duplicate detection | ✅ | Occurrence-aware |
 | Original values kept for audit | ✅ | Visible in transaction details |
 | Search, filters, editing (category, notes) | ✅ | |
+| Review queue (categorise by merchant, confirm/reject transfer pairs) | ✅ | |
 | Manual transaction entry | ✅ | Dedupes against later imports; deletable |
 | Split transactions | ✅ | Exact-cent validation; analytics use split parts |
 | Editable categories (kind, essential, colour, archive) | ✅ | |
@@ -55,7 +56,7 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Decision journal with search/filter | ✅ | |
 | Immutable snapshots, snapshot history on reopen | ✅ | |
 | Outcome reviews with predicted vs actual | ✅ | |
-| Preference insights / calibration with sample sizes | 🟡 | Cost (incl. how many measured from linked transactions), satisfaction, repeat rate, confidence; criterion-level over/under-valuation ⬜ |
+| Preference insights / calibration with sample sizes | ✅ | Cost, satisfaction, repeat rate, confidence, and criterion-level rank correlation (from 10 decisions) |
 
 ## Phase 4 — FutureRegret
 
@@ -68,7 +69,7 @@ Legend: ✅ implemented and tested · 🟡 partial · ⬜ planned
 | Opportunity-cost comparison | ✅ | |
 | Sensitivity (tornado) | ✅ | |
 | Charts comparing scenarios | ✅ | With table view |
-| Monte Carlo simulation | ✅ | Log-normal returns, seeded, Web Worker, fan chart, histogram, target/shortfall/loss probabilities, differences with common random numbers; summary frozen in decision snapshots |
+| Monte Carlo simulation | ✅ | Log-normal returns, optional crash risk and uncertain inflation, seeded, Web Worker, fan chart, histogram, target/shortfall/loss probabilities, differences with common random numbers; summary frozen in decision snapshots; plus a deterministic sequence-of-returns stress test |
 
 ## Phase 5 — Integration
 
@@ -90,7 +91,7 @@ Anomalies, basic calibration and Monte Carlo are done. See [BACKLOG.md](BACKLOG.
 
 - Tax model is a flat rate on monthly returns with loss credits (PIE approximation).
 - Multi-currency is not supported (NZD only).
-- Large datasets (> ~50k transactions) are untested for UI performance.
+- Analytics are benchmarked at 50k transactions (~0.3 s per data change in Node); the transaction table pages 100 rows at a time rather than virtualising.
 - Recurring detection uses merchant keys; merchants whose description changes every month may be missed.
 - Monte Carlo assumes independent monthly returns and fixed inflation (no crash clustering or fat tails).
 - Split parts are categorised manually; rules do not create splits.

@@ -22,7 +22,7 @@ Every number DecisionLab shows is defined here. Code references point to the imp
 - **Savings rate** = (income − spending) / income; undefined (shown “—”) when income ≤ 0.
 - **Complete months only**: monthly analytics and estimates exclude the current, partial month.
 - **Period comparison** (a month vs the three before it, or any two custom date ranges) normalises both periods to a 30.4375-day month.
-- **Likely transfers**: an outflow and an equal inflow in different accounts within 3 days, neither already a transfer — suggested, never applied automatically.
+- **Likely transfers**: an outflow and an equal inflow in different accounts within 3 days, neither already a transfer. Each outflow is paired with the *closest-dated* unused match. Suggestions are never applied automatically: in the Review tab you confirm pairs (both sides become Transfers) or reject them (remembered, not suggested again).
 
 ## Statement balances (`src/engine/balances.ts`)
 
@@ -47,6 +47,10 @@ Header signatures pre-fill the mapping. Heartland Bank is verified against real 
 ## Categorisation (`src/engine/categorise.ts`)
 
 Precedence: manual (never overwritten) → merchant memory (from “apply to same merchant” corrections) → first matching enabled rule by priority → uncategorised.
+
+## Review queue (`src/engine/review.ts`)
+
+Uncategorised, unsplit transactions are grouped by merchant key (largest groups first, by count then |net amount|). Choosing a category for a group categorises every transaction in it and stores it as merchant memory, so future imports from that merchant are categorised too. Optionally a rule *merchant contains “first three words”* can be created from the same choice.
 
 ## Duplicate detection (`src/engine/dedupe.ts`)
 
@@ -139,6 +143,8 @@ Optional. Repeats the projection many times with random monthly returns; everyth
 - **Percentiles**: linear interpolation between closest ranks (type 7).
 - **Randomness**: `mulberry32` seeded PRNG + Box–Muller normals; same inputs and seed ⇒ identical results on every platform. Runs: 100–20,000 (default 2,000), computed in a Web Worker.
 - **Limitations** (stated in the UI): independent returns (no crashes clustering, momentum, mean reversion, fat tails or regime changes), fixed inflation, no sequence of fee changes. More runs make the percentiles more precise *for this model*, not more accurate as forecasts.
+- **Crash risk** (optional): with annual probability *p* (monthly p_m = 1 − (1 − p)^(1/12)) the month's log return gets an extra ln(1 − C) for crash size C. The normal part's mean is raised by −ln(1 − p_m·C), so the *expected* gross return is unchanged (tested): crashes fatten the downside rather than lowering the average. (A Student-t model was rejected because, compounded, its expected value is infinite.)
+- **Uncertain inflation** (optional): each simulated year draws inflation ~ N(π, σ_π), floored at −10%. Real values use each path's own price index; inflation-indexed recurring flows grow with that path's inflation. With σ_π = 0 results equal the fixed-inflation model exactly.
 - Volatility presets are rough guides only: cash ≈ 0.5%, conservative ≈ 5%, balanced ≈ 9%, growth ≈ 12%, aggressive ≈ 16% per year.
 - When enabled on a decision, P10/median/P90 of each option's final real balance are frozen in the snapshot when the choice is recorded.
 
@@ -154,6 +160,10 @@ Entered with the same base key as imports (`account|date|amount|DESCRIPTION`), s
 
 - Actual cost = −Σ amounts of transactions linked to the decision (payments add, refunds/resale subtract). Shown as **Known**; a typed-in actual cost is **Manual**, and the review records which was used (`actualCostSource`).
 - Suggestions: outflows from 7 days before the decision to 180 days after, not linked elsewhere, scored by words (≥ 4 letters) shared with the decision title or chosen option, and by an amount within 25% of the expected cost. Manual search covers a year either side.
+
+## Sequence-of-returns stress test (`sequenceStress` in `src/engine/projection.ts`)
+
+Deterministic: the projection is re-run with one month's return replaced by a fall of the chosen size (default −30%) in the first month, the middle month or the last month, and compared with no fall. Same timing, fee and tax conventions as the projection. With no cash flows the timing cannot matter (multiplication commutes — tested); with contributions an early fall hurts less, with withdrawals or a spend early in the horizon the result depends on what is invested when the fall hits.
 
 ## Sensitivity analysis (`src/engine/sensitivity.ts`)
 
@@ -173,9 +183,11 @@ From decisions with both a snapshot and a review:
 
 Every figure shows n. Below 5 reviewed decisions the page explicitly says results are observations, not patterns.
 
+**Criterion-level insights**: for each criterion name reused across reviewed decisions (case-insensitive), the Spearman rank correlation ρ between the chosen option's normalised score on that criterion and actual satisfaction, plus the mean weight share you gave it. Readings appear only from **10** decisions: ρ ≥ 0.3 → “went with satisfaction” (or “worth more weight?” if its mean weight is under 15%); otherwise “no clear link”, or “weighted heavily but didn't track satisfaction” if its mean weight is 30%+. These are associations, not causes, and remain noisy at tens of decisions.
+
 ## Statistics (`src/engine/stats.ts`)
 
-Percentiles use linear interpolation between closest ranks (Hyndman–Fan type 7, as NumPy's default). Standard deviation is the sample (n − 1) version.
+Percentiles use linear interpolation between closest ranks (Hyndman–Fan type 7, as NumPy's default). Standard deviation is the sample (n − 1) version. Spearman correlation = Pearson correlation of tie-averaged ranks (null for constant inputs or n < 3).
 
 ## Random numbers (`src/engine/random.ts`)
 

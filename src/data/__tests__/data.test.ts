@@ -467,3 +467,35 @@ describe('summary balances (e.g. Heartland exports)', () => {
     expect(p.closingBalance).toBeNull();
   });
 });
+
+describe('backup schedule', () => {
+  it('computes reminders, records backups and keeps device-only settings out of backup files', async () => {
+    const { backupStatus, runBackup, getBackupState } = await import('../backupSchedule');
+    expect(backupStatus({ intervalDays: 14 }, '2026-11-22', true)).toEqual({ daysSince: null, due: true });
+    expect(backupStatus({ intervalDays: 14 }, '2026-11-22', false).due).toBe(false);
+    expect(backupStatus({ intervalDays: 14, lastBackupAt: '2026-11-15T10:00:00Z' }, '2026-11-22', true)).toEqual({ daysSince: 7, due: false });
+    expect(backupStatus({ intervalDays: 7, lastBackupAt: '2026-11-15T10:00:00Z' }, '2026-11-22', true).due).toBe(true);
+    expect(backupStatus({ intervalDays: 0 }, '2026-11-22', true).due).toBe(false);
+
+    await setupAccount();
+    await db.settings.put({ key: 'backupFolderHandle', value: { fake: true } });
+    let saved = '';
+    await expect(runBackup({ encrypt: true, download: () => {} })).rejects.toThrow(/passphrase/);
+    const out = await runBackup({ encrypt: true, passphrase: 'correct horse battery', download: (_n, t) => (saved = t) });
+    expect(out.savedTo).toBe('download');
+    expect(out.fileName).toMatch(/\.decisionlab-backup\.enc\.json$/);
+    expect((await getBackupState()).lastBackupAt).toBeDefined();
+    const plain = JSON.parse(JSON.stringify(await exportBackup()));
+    expect(plain.data.settings.some((r: { key: string }) => r.key === 'backupFolderHandle' || r.key === 'backupState')).toBe(false);
+    expect(saved).not.toContain('Everyday');
+  });
+
+  it('records Monte Carlo risk options in decision snapshots', async () => {
+    const d = blankDecision(defaultAssumptions('2026-11-22'));
+    d.title = 'x';
+    d.options[0]!.upfrontCost = 100_000;
+    d.monteCarlo = { enabled: true, annualVolatility: 0.1, runs: 200, seed: 3, crashProbability: 0.05, crashSize: 0.3, inflationVolatility: 0.01 };
+    const decided = await recordChoice(d, d.options[0]!.id);
+    expect(decided.snapshot!.monteCarlo!.settings).toMatchObject({ crashProbability: 0.05, crashSize: 0.3, inflationVolatility: 0.01 });
+  });
+});

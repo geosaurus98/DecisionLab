@@ -96,7 +96,8 @@ export function buildSnapshot(d: Decision, selectedOptionId: string, availableNo
 /** Percentiles of each option's final real balance, if Monte Carlo is enabled for the decision. */
 function monteCarloSummary(d: Decision): DecisionSnapshot['monteCarlo'] {
   if (!d.monteCarlo?.enabled) return undefined;
-  const settings = { annualVolatility: d.monteCarlo.annualVolatility, runs: d.monteCarlo.runs, seed: d.monteCarlo.seed };
+  const { enabled: _enabled, ...settings } = d.monteCarlo;
+  void _enabled;
   const res = simulate(d.assumptions, d.options.map(optionToVariant), settings);
   return {
     settings,

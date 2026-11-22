@@ -10,16 +10,16 @@ import { undoImport } from '@/data/imports';
 import { loadDemoData } from '@/data/demo/load';
 import { formatDate } from '@/domain/dates';
 import { formatMoney } from '@/domain/money';
-import { findTransferPairs } from '@/engine/cashflow';
 import { merchantLabel } from '@/engine/merchant';
 import { toCsv } from '@/engine/csv';
 import type { Category, Transaction } from '@/domain/types';
 import { useToast } from '@/ui/toast';
 import { ImportWizard } from './ImportWizard';
 import { RulesPanel } from './RulesPanel';
+import { ReviewPanel, useReviewCounts } from './ReviewPanel';
 import { downloadText } from '@/ui/download';
 
-type Tab = 'transactions' | 'imports' | 'rules';
+type Tab = 'transactions' | 'review' | 'imports' | 'rules';
 const PAGE = 100;
 
 export function CategorySelect({ categories, value, onChange, id, ariaLabel, includeNone = true, className }: {
@@ -86,7 +86,7 @@ export function TransactionsPage() {
     );
   }, [analytics.transactions, search, accountFilter, categoryFilter, direction, from, to]);
 
-  const transferPairs = useMemo(() => findTransferPairs(analytics.transactions, analytics.categoryMap), [analytics.transactions, analytics.categoryMap]);
+  const reviewCounts = useReviewCounts(analytics);
   const selectedTxn = selectedId ? analytics.transactions.find((t) => t.id === selectedId) ?? null : null;
   const uncategorisedCount = analytics.transactions.filter((t) => t.categoryId === null).length;
   const total = filtered.reduce((a, t) => a + t.amount, 0);
@@ -137,7 +137,12 @@ export function TransactionsPage() {
         value={tab}
         onChange={setTab}
         tabs={[
-          { value: 'transactions', label: 'Transactions', badge: uncategorisedCount > 0 ? <Badge tone="warn">{uncategorisedCount} to review</Badge> : undefined },
+          { value: 'transactions', label: 'Transactions' },
+          {
+            value: 'review',
+            label: 'Review',
+            badge: reviewCounts.pairs + reviewCounts.merchants > 0 ? <Badge tone="warn">{uncategorisedCount} uncategorised · {reviewCounts.pairs} transfers</Badge> : undefined,
+          },
           { value: 'imports', label: 'Import history' },
           { value: 'rules', label: 'Categorisation rules' },
         ]}
@@ -167,25 +172,13 @@ export function TransactionsPage() {
           </EmptyState>
         ) : (
           <div className="grid gap-4">
-            {transferPairs.length > 0 && (
-              <Notice tone="warn" title={`${transferPairs.length} possible transfers between your accounts`}>
-                <p>
-                  Equal and opposite amounts in two of your accounts within 3 days. If these are transfers, categorising them as Transfers stops them being
-                  counted as both spending and income.
-                </p>
-                <Button
-                  size="sm"
-                  className="mt-2"
-                  onClick={async () => {
-                    for (const [o, i] of transferPairs) {
-                      await setTransactionCategory(o.id, 'cat-transfers', false);
-                      await setTransactionCategory(i.id, 'cat-transfers', false);
-                    }
-                    toast({ message: `Marked ${transferPairs.length * 2} transactions as transfers.`, tone: 'good' });
-                  }}
-                >
-                  Mark all as transfers
-                </Button>
+            {reviewCounts.pairs + reviewCounts.merchants > 0 && (
+              <Notice tone="info">
+                {uncategorisedCount} transactions from {reviewCounts.merchants} merchants are uncategorised, and {reviewCounts.pairs} possible transfers between your accounts
+                need confirming.{' '}
+                <button className="font-semibold text-accent underline" onClick={() => setTab('review')}>
+                  Review them merchant by merchant
+                </button>
               </Notice>
             )}
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
@@ -292,6 +285,7 @@ export function TransactionsPage() {
           </div>
         ))}
 
+      {tab === 'review' && <ReviewPanel a={analytics} accountName={accountName} />}
       {tab === 'imports' && <ImportHistory accountName={accountName} />}
       {tab === 'rules' && <RulesPanel />}
 

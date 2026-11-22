@@ -41,7 +41,8 @@ export function useMonteCarlo(
       setState({ result: null, running: false, error: null, ms: null });
       return;
     }
-    const settings = { annualVolatility: config.annualVolatility, runs: config.runs, seed: config.seed };
+    const { enabled: _enabled, ...settings } = config;
+    void _enabled;
     const errors = [...validateAssumptions(assumptions), ...validateMonteCarlo(settings)];
     if (variants.length === 0) errors.push('Add at least one alternative.');
     if (errors.length) {

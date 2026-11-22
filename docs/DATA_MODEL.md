@@ -43,7 +43,7 @@ erDiagram
 | `goals` | `id` | `Goal` | `earmarked` amounts are excluded from available funds; optional `accountId` uses that account's balance as the saved amount |
 | `decisions` | `id`, `status`, `date`, `reviewDate`, `updatedAt` | `Decision` | Embeds options, criteria, score matrix, its own `ProjectionAssumptions`, `snapshot`, `snapshotHistory`, `review` |
 | `scenarioSets` | `id`, `updatedAt` | `ScenarioSet` | Base assumptions + variants (one-off and recurring flows, contribution change) + optional `monteCarlo` config |
-| `settings` | `key` | key–value | `financialProfile`, `defaultAssumptions`, `seeded`, `reviewReminders` |
+| `settings` | `key` | key–value | `financialProfile`, `defaultAssumptions`, `seeded`, `reviewReminders`, `rejectedTransferPairs` ("outId\|inId" list); device-only and excluded from backups: `backupState` (last backup, reminder interval, folder name) and `backupFolderHandle` |
 | `budgets` | `categoryId` | `Budget` | `monthlyAmount` (cents) per expense category |
 | `recurringOverrides` | `key` | `RecurringOverride` | Your edits to a detected series: `status` confirmed/dismissed, `label`, `expectedAmount` |
 
@@ -73,7 +73,7 @@ UI-only preferences (theme) are kept in `localStorage`, never financial data.
 - `scores[optionId][criterionId]`: number or null.
 - `pairwise?`: AHP judgements keyed `"criterionA|criterionB"` (value of A relative to B, 1/9 … 9).
 - `assumptions`: the decision's own copy of projection assumptions (not a reference to global defaults).
-- `monteCarlo?`: `{enabled, annualVolatility, runs, seed}` for the optional uncertainty simulation.
+- `monteCarlo?`: `{enabled, annualVolatility, runs, seed, crashProbability?, crashSize?, inflationVolatility?}` for the optional uncertainty simulation (same shape on scenario sets).
 - `selectedOptionId`, `reasoning`, `predictedSatisfaction` (1–10), `confidence` (1–5), `reviewDate`.
 - `snapshot`: `DecisionSnapshot` — deep copy of options, criteria, scores, ranking, assumptions, projected financials per option, available funds, predictions, predicted cost and (if enabled) Monte Carlo P10/median/P90 per option, captured when the choice is recorded. **Never rewritten.**
 - `snapshotHistory[]`: earlier snapshots when a choice was reopened before review.

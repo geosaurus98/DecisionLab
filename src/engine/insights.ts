@@ -4,7 +4,8 @@
  * as observations, not conclusions.
  */
 import type { Decision } from '@/domain/types';
-import { mean, median } from './stats';
+import { mean, median, spearman } from './stats';
+import { normaliseCriterion, normaliseWeights } from './scoring';
 
 export const MIN_SAMPLE_FOR_PATTERN = 5;
 
@@ -58,4 +59,64 @@ export function calibrate(decisions: Decision[]): CalibrationSummary {
     byCategory,
     confidenceCalibration,
   };
+}
+
+// ───────────────────────── Criterion-level insights ─────────────────────────
+
+/** Minimum reviewed decisions sharing a criterion before its pattern is reported. */
+export const MIN_CRITERION_SAMPLE = 10;
+
+export interface CriterionInsight {
+  /** Criterion name as you used it (most recent spelling). */
+  name: string;
+  n: number;
+  /** Mean share of total weight you gave this criterion. */
+  meanWeight: number;
+  /**
+   * Spearman rank correlation between the chosen option's normalised score on this criterion
+   * and your actual satisfaction. null when not computable (constant values) or n too small.
+   */
+  rho: number | null;
+  /** Plain-language reading, or null when evidence is insufficient. */
+  reading: 'predictive' | 'notPredictive' | 'weightedButNotPredictive' | 'underweighted' | null;
+}
+
+/**
+ * For criteria reused across reviewed decisions (matched by name, case-insensitive), measure
+ * whether scoring the chosen option higher on that criterion went with higher actual
+ * satisfaction. Correlation is not causation, and with tens of decisions estimates are noisy:
+ * results below MIN_CRITERION_SAMPLE are listed without interpretation.
+ */
+export function criterionInsights(decisions: Decision[]): CriterionInsight[] {
+  const obs = new Map<string, { name: string; score: number[]; satisfaction: number[]; weight: number[] }>();
+  for (const d of decisions) {
+    const s = d.snapshot;
+    if (!s || !d.review || s.criteria.length === 0) continue;
+    const weights = normaliseWeights(s.criteria);
+    for (const c of s.criteria) {
+      const n = normaliseCriterion(c, s.options, s.scores)[s.selectedOptionId];
+      if (n === null || n === undefined) continue;
+      const key = c.name.trim().toLowerCase();
+      if (!key) continue;
+      const o = obs.get(key) ?? { name: c.name.trim(), score: [], satisfaction: [], weight: [] };
+      o.name = c.name.trim();
+      o.score.push(n);
+      o.satisfaction.push(d.review.satisfaction);
+      o.weight.push(weights[c.id] ?? 0);
+      obs.set(key, o);
+    }
+  }
+  return [...obs.values()]
+    .map((o) => {
+      const n = o.score.length;
+      const rho = n >= 3 ? spearman(o.score, o.satisfaction) : null;
+      const meanWeight = mean(o.weight);
+      let reading: CriterionInsight['reading'] = null;
+      if (n >= MIN_CRITERION_SAMPLE && rho !== null) {
+        if (rho >= 0.3) reading = meanWeight < 0.15 ? 'underweighted' : 'predictive';
+        else reading = meanWeight >= 0.3 ? 'weightedButNotPredictive' : 'notPredictive';
+      }
+      return { name: o.name, n, meanWeight, rho: n >= MIN_CRITERION_SAMPLE ? rho : null, reading };
+    })
+    .sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
 }

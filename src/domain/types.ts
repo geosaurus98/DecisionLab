@@ -295,6 +295,12 @@ export interface MonteCarloConfig {
   annualVolatility: number;
   runs: number;
   seed: number;
+  /** Annual probability of a market crash (0 = off). The expected return is kept unchanged. */
+  crashProbability?: number;
+  /** Size of a crash as a fraction of the balance's investment value (e.g. 0.3 = −30%). */
+  crashSize?: number;
+  /** Annual standard deviation of inflation (0 = fixed inflation). Drawn once per simulated year. */
+  inflationVolatility?: number;
 }
 
 export interface ScenarioSet {
